@@ -6,21 +6,21 @@ import time
 
 # --- 1. AYARLAR ---
 st.set_page_config(
-    page_title="ProTrade Scanner V32",
+    page_title="ProTrade BIST Scanner",
     layout="wide",
-    page_icon="📡"
+    page_icon="🇹🇷"
 )
 
-# CSS STİLİ
+# CSS STİLİ (Modern & Türk Bayrağı Temalı)
 st.markdown("""
 <style>
     .stApp { background-color: #0F172A; color: #E2E8F0; }
     [data-testid="stSidebar"] { background-color: #1E293B; border-right: 1px solid #334155; }
     
     .header-style {
-        font-size: 2.2rem; font-weight: 800; color: #38bdf8;
+        font-size: 2.2rem; font-weight: 800; color: #ef4444;
         text-align: center; margin-bottom: 25px;
-        text-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
+        text-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
     }
     
     .success-box {
@@ -31,33 +31,75 @@ st.markdown("""
     .success-box:hover { transform: scale(1.02); }
     
     .stButton>button {
-        background: linear-gradient(90deg, #2563eb, #06b6d4);
+        background: linear-gradient(90deg, #ef4444, #b91c1c);
         color: white; font-weight: bold; padding: 12px; border-radius: 8px; border:none;
+        font-size: 1.1rem;
     }
+    .stButton>button:hover { opacity: 0.9; }
     
     /* Tablo */
     div[data-testid="stDataFrame"] { background-color: #1e293b; border-radius: 10px; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 2. TARAMA MOTORU ---
+# --- 2. LİSTELER (BIST ÖZEL) ---
+
+# BIST 30 (En Büyükler)
+bist30 = [
+    "AKBNK.IS", "ALARK.IS", "ARCLK.IS", "ASELS.IS", "ASTOR.IS", "BIMAS.IS", "BRSAN.IS", "DOAS.IS", "EKGYO.IS", "ENKAI.IS",
+    "EREGL.IS", "FROTO.IS", "GARAN.IS", "GUBRF.IS", "HEKTS.IS", "ISCTR.IS", "KCHOL.IS", "KONTR.IS", "KOZAL.IS", "KRDMD.IS",
+    "ODAS.IS", "OYAKC.IS", "PETKM.IS", "PGSUS.IS", "SAHOL.IS", "SASA.IS", "SISE.IS", "TCELL.IS", "THYAO.IS", "TOASO.IS",
+    "TUPRS.IS", "YKBNK.IS"
+]
+
+# BIST 50 (30 + 20 Ek)
+bist50_ek = [
+    "AEFES.IS", "AGHOL.IS", "AKCNS.IS", "AKSA.IS", "AKSEN.IS", "ALBRK.IS", "ASUZU.IS", "AYDEM.IS", "BIOEN.IS", "CCOLA.IS",
+    "CIMSA.IS", "DOHOL.IS", "ECILC.IS", "EGEEN.IS", "ENJSA.IS", "EUREN.IS", "GESAN.IS", "GLYHO.IS", "GWIND.IS", "HALKB.IS",
+    "ISGYO.IS", "ISMEN.IS", "KARSN.IS", "KMPUR.IS", "KORDS.IS", "KOZAA.IS", "MGROS.IS", "OTKAR.IS", "QUAGR.IS", "SKBNK.IS",
+    "SOKM.IS", "TAVHL.IS", "TKFEN.IS", "TTKOM.IS", "TTRAK.IS", "ULKER.IS", "VAKBN.IS", "VESTL.IS"
+]
+bist50 = list(set(bist30 + bist50_ek)) # Birleştir ve kopyaları sil
+
+# BIST 100 (50 + 50 Ek)
+bist100_ek = [
+    "AKFGY.IS", "AKFYE.IS", "ALFAS.IS", "BAGFS.IS", "BERA.IS", "BFREN.IS", "BIENY.IS", "BOBET.IS", "BRYAT.IS", "BUCIM.IS",
+    "CANTE.IS", "CWENE.IS", "ECZYT.IS", "EUPWR.IS", "GENIL.IS", "GOKNR.IS", "IMASM.IS", "IPEKE.IS", "ISDMR.IS", "IZMDC.IS",
+    "KCAER.IS", "KONYA.IS", "KZBGY.IS", "MAVI.IS", "MIATK.IS", "PENTA.IS", "PSGYO.IS", "REEDR.IS", "SDTTR.IS", "SMRTG.IS",
+    "TABGD.IS", "TSKB.IS", "TUKAS.IS", "VESBE.IS", "YEOTK.IS", "YYLGD.IS", "ZOREN.IS", "ADGYO.IS", "AHLGY.IS", "ANSGR.IS"
+]
+bist100 = list(set(bist50 + bist100_ek))
+
+# BIST TÜMÜ (Genişletilmiş - Popüler Yan Tahtalar Dahil)
+# BIST 100'e ek olarak piyasada çok işlem gören diğer hisseler
+yan_tahtalar = [
+    "FONET.IS", "VBTYZ.IS", "ONCSM.IS", "CVKMD.IS", "TARKM.IS", "EBEBK.IS", "KBORU.IS", "MEKAG.IS", "HATSN.IS", "MARBL.IS",
+    "MHRGY.IS", "BORLS.IS", "GIPTA.IS", "KZGYO.IS", "BYDNR.IS", "ENERY.IS", "BAYRK.IS", "IZENR.IS", "TATEN.IS", "OFSYM.IS",
+    "KALES.IS", "FZLGY.IS", "ATAKP.IS", "KTLEV.IS", "FORTE.IS", "PASEU.IS", "A1CAP.IS", "CVENR.IS", "GRTRK.IS", "EKSUN.IS",
+    "PLTUR.IS", "SOKE.IS", "TEZOL.IS", "YUNSA.IS", "VKGYO.IS", "TURSG.IS", "TRGYO.IS", "TMPOL.IS", "TIRE.IS", "SNGYO.IS",
+    "SELEC.IS", "RYGYO.IS", "PRKME.IS", "PARSN.IS", "OZKGY.IS", "NTHOL.IS", "NETAS.IS", "LOGO.IS", "LINK.IS", "KRVGD.IS",
+    "KLGYO.IS", "KAREL.IS", "JANTS.IS", "HUNER.IS", "HLGYO.IS", "GEDIK.IS", "GENTS.IS", "EMKEL.IS", "DGATE.IS", "DERIM.IS"
+]
+bist_tumu = list(set(bist100 + yan_tahtalar))
+
+# --- 3. TARAMA MOTORU ---
 
 def verileri_analiz_et(semboller, strateji):
     sonuclar = []
     
-    # İlerleme Çubuğu ve Bilgi
+    # İlerleme Çubuğu
     durum_kutusu = st.empty()
     bar = st.progress(0)
     toplam = len(semboller)
     
+    start_time = time.time()
+    
     for i, sembol in enumerate(semboller):
-        # Durum Güncelle
-        durum_kutusu.caption(f"Taraniyor: {sembol} ({i+1}/{toplam})")
+        durum_kutusu.info(f"🔎 Taranıyor: **{sembol.replace('.IS', '')}** ({i+1}/{toplam})")
         
         try:
-            # Veri Çek
             ticker = yf.Ticker(sembol)
-            df = ticker.history(period="6mo") # 6 ay yeterli, daha hızlı olur
+            df = ticker.history(period="6mo")
             
             if df.empty: continue
             
@@ -82,108 +124,83 @@ def verileri_analiz_et(semboller, strateji):
             neden = ""
             
             # --- STRATEJİLER ---
-            
             if strateji == "Momentum Canavarı 🚀":
-                # RSI > 50 ve MACD Pozitif ve Trend Yukarı
                 if rsi > 50 and macd_val > 0 and trend_yon == 1:
                     uygun = True
-                    neden = f"RSI Güçlü ({rsi:.1f}) + MACD Al + Trend Yukarı"
+                    neden = f"RSI Güçlü ({rsi:.1f}) + MACD Al"
 
             elif strateji == "Golden Cross 🏆":
-                # EMA 50 > EMA 200 (Sadece uzun veri varsa)
                 if ema200 > 0 and ema50 > ema200 and fiyat > ema50:
                     uygun = True
-                    neden = "EMA 50 > EMA 200 (Golden Cross)"
+                    neden = "Altın Kesişim (50 > 200)"
 
             elif strateji == "Dip Avcısı 🎣":
-                # RSI < 30
                 if rsi < 30:
                     uygun = True
-                    neden = f"Aşırı Satım (RSI: {rsi:.1f})"
+                    neden = f"Aşırı Ucuz (RSI: {rsi:.1f})"
 
-            elif strateji == "Trend Takipçisi 🛡️":
-                # Sadece SuperTrend AL ve Fiyat > EMA50
+            elif strateji == "Güvenli Liman 🛡️":
                 if trend_yon == 1 and fiyat > ema50:
                     uygun = True
-                    neden = "SuperTrend AL + Fiyat Ortalamaların Üstünde"
+                    neden = "Trend Yukarı + Fiyat EMA Üstü"
 
             if uygun:
                 sonuclar.append({
                     "Hisse": sembol.replace(".IS", ""),
-                    "Fiyat": f"{fiyat:.2f}",
+                    "Fiyat": f"{fiyat:.2f} ₺",
                     "RSI": f"{rsi:.1f}",
                     "Sinyal": neden
                 })
                 
         except: pass
-        
-        # Bar İlerle
         bar.progress(min((i + 1) / toplam, 1.0))
-        
+    
+    elapsed = time.time() - start_time
     durum_kutusu.empty()
     bar.empty()
-    return pd.DataFrame(sonuclar)
-
-# --- 3. LİSTELER (GENİŞLETİLMİŞ) ---
-
-# BIST 100 TAM LİSTE (Güncel Bileşenler)
-bist100_list = [
-    "AEFES.IS", "AGHOL.IS", "AGROT.IS", "AKBNK.IS", "AKCNS.IS", "AKFGY.IS", "AKFYE.IS", "AKSA.IS", "AKSEN.IS", "ALARK.IS",
-    "ALBRK.IS", "ALFAS.IS", "ARCLK.IS", "ASELS.IS", "ASTOR.IS", "ASUZU.IS", "AYDEM.IS", "BAGFS.IS", "BERA.IS", "BFREN.IS",
-    "BIENY.IS", "BIMAS.IS", "BIOEN.IS", "BOBET.IS", "BRSAN.IS", "BRYAT.IS", "BUCIM.IS", "CANTE.IS", "CCOLA.IS", "CIMSA.IS",
-    "CWENE.IS", "DOAS.IS", "DOHOL.IS", "ECILC.IS", "ECZYT.IS", "EGEEN.IS", "EKGYO.IS", "ENJSA.IS", "ENKAI.IS", "EREGL.IS",
-    "EUPWR.IS", "EUREN.IS", "FROTO.IS", "GARAN.IS", "GENIL.IS", "GESAN.IS", "GLYHO.IS", "GOKNR.IS", "GUBRF.IS", "GWIND.IS",
-    "HALKB.IS", "HEKTS.IS", "IMASM.IS", "IPEKE.IS", "ISCTR.IS", "ISDMR.IS", "ISGYO.IS", "ISMEN.IS", "IZMDC.IS", "KARSN.IS",
-    "KCAER.IS", "KCHOL.IS", "KMPUR.IS", "KONTR.IS", "KONYA.IS", "KORDS.IS", "KOZAA.IS", "KOZAL.IS", "KRDMD.IS", "KZBGY.IS",
-    "MAVI.IS", "MGROS.IS", "MIATK.IS", "ODAS.IS", "OTKAR.IS", "OYAKC.IS", "PENTA.IS", "PETKM.IS", "PGSUS.IS", "PSGYO.IS",
-    "QUAGR.IS", "REEDR.IS", "SAHOL.IS", "SASA.IS", "SDTTR.IS", "SISE.IS", "SKBNK.IS", "SMRTG.IS", "SOKM.IS", "TABGD.IS",
-    "TAVHL.IS", "TCELL.IS", "THYAO.IS", "TKFEN.IS", "TOASO.IS", "TSKB.IS", "TTKOM.IS", "TTRAK.IS", "TUKAS.IS", "TUPRS.IS",
-    "ULKER.IS", "VAKBN.IS", "VESBE.IS", "VESTL.IS", "YEOTK.IS", "YKBNK.IS", "YYLGD.IS", "ZOREN.IS"
-]
-
-# ABD DEVLER LİGİ (S&P 50 Top 50)
-usa_top50 = [
-    "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "BRK-B", "LLY", "V",
-    "TSM", "UNH", "AVGO", "JPM", "XOM", "WMT", "JNJ", "MA", "PG", "HD",
-    "MRK", "COST", "ABBV", "CVX", "CRM", "AMD", "PEP", "KO", "BAC", "ACN",
-    "NFLX", "LIN", "MCD", "DIS", "ADBE", "NKE", "INTC", "T", "VZ", "PFE",
-    "CSCO", "CMCSA", "TMUS", "WFC", "BA", "INTU", "QCOM", "IBM", "GE", "AMGN"
-]
+    return pd.DataFrame(sonuclar), elapsed
 
 # --- 4. YAN MENÜ ---
 with st.sidebar:
-    st.header("📡 ProTrade Scanner")
+    st.header("🇹🇷 PROTRADE BIST")
     st.markdown("---")
     
-    # Pazar Seçimi
-    pazar = st.selectbox("PAZAR SEÇİMİ", ["🇹🇷 BIST 100 (Tam Liste)", "🇺🇸 ABD Top 50 (Devler)", "⭐ BIST 30 (Hızlı)"])
+    # Borsa Filtresi
+    kategori = st.radio("Hisse Grubu Seç:", [
+        "BIST 30 (Devler)",
+        "BIST 50 (Büyükler)",
+        "BIST 100 (Ana Pazar)",
+        "BIST TÜMÜ (Genişletilmiş)"
+    ])
     
-    # Liste Atama
-    if pazar == "🇹🇷 BIST 100 (Tam Liste)":
-        sembol_listesi = bist100_list
-        mesaj = "BIST 100 Endeksinin tamamı (100 Hisse) taranacak."
-    elif pazar == "🇺🇸 ABD Top 50 (Devler)":
-        sembol_listesi = usa_top50
-        mesaj = "Amerika'nın en büyük 50 şirketi taranacak."
+    if "30" in kategori:
+        secili_liste = bist30
+        bilgi = "En büyük 30 şirket taranacak."
+    elif "50" in kategori:
+        secili_liste = bist50
+        bilgi = "En büyük 50 şirket taranacak."
+    elif "100" in kategori:
+        secili_liste = bist100
+        bilgi = "BIST 100 endeksinin tamamı taranacak."
     else:
-        sembol_listesi = bist100_list[:30] # İlk 30
-        mesaj = "BIST 30 (En Hacimli) hisseler taranacak."
-        
-    st.caption(f"ℹ️ {mesaj}")
+        secili_liste = bist_tumu
+        bilgi = f"BIST 100 + Popüler Yan Tahtalar ({len(bist_tumu)} Hisse) taranacak."
     
-    # Özel Hisse Ekleme
-    ekstra = st.text_input("Listeye Özel Ekle (Örn: BJKAS)", "")
+    st.info(f"ℹ️ {bilgi}")
+    
+    # Özel Ekleme
+    ekstra = st.text_input("Listeye Özel Ekle (Örn: BFREN)", "")
     if ekstra:
-        s = f"{ekstra.upper()}.IS" if "BIST" in pazar else ekstra.upper()
-        if s not in sembol_listesi: sembol_listesi.append(s)
+        s = f"{ekstra.upper()}.IS"
+        if s not in secili_liste: secili_liste.append(s)
     
     st.markdown("---")
     
     # Strateji
     st.markdown("### 🧠 Strateji")
-    strateji = st.radio("Sinyal Türü:", [
+    strateji = st.radio("Sinyal Tipi:", [
         "Momentum Canavarı 🚀",
-        "Trend Takipçisi 🛡️",
+        "Güvenli Liman 🛡️",
         "Dip Avcısı 🎣",
         "Golden Cross 🏆"
     ])
@@ -192,24 +209,25 @@ with st.sidebar:
     baslat = st.button("TARAMAYI BAŞLAT 🔥", use_container_width=True)
 
 # --- 5. ANA EKRAN ---
-st.markdown('<div class="header-style">BORSA TARAMA MERKEZİ</div>', unsafe_allow_html=True)
+st.markdown('<div class="header-style">BORSA İSTANBUL TARAMA MERKEZİ</div>', unsafe_allow_html=True)
 
 if baslat:
-    st.info(f"🚀 Analiz Başladı! {len(sembol_listesi)} hisse için veriler çekiliyor... (Ortalama süre: 1-2 dakika)")
+    st.success(f"🚀 **{kategori}** analizi başladı! Toplam **{len(secili_liste)}** hisse inceleniyor...")
     
-    # Analiz Fonksiyonunu Çağır
-    sonuc_df = verileri_analiz_et(sembol_listesi, strateji)
+    df_sonuc, sure = verileri_analiz_et(secili_liste, strateji)
     
-    if not sonuc_df.empty:
-        st.success(f"🎉 SONUÇ: {len(sonuc_df)} adet hisse kriterlere uydu!")
+    if not df_sonuc.empty:
+        st.balloons()
+        st.markdown(f"### 🎉 Tarama Bitti! ({sure:.1f} saniye sürdü)")
+        st.success(f"Toplam **{len(df_sonuc)}** adet fırsat bulundu.")
         
-        # Tablo
-        st.dataframe(sonuc_df, use_container_width=True, hide_index=True)
+        # Sonuç Tablosu
+        st.dataframe(df_sonuc, use_container_width=True, hide_index=True)
         
         # Kartlar
         st.markdown("### 💡 Fırsat Kartları")
         cols = st.columns(3)
-        for idx, row in sonuc_df.iterrows():
+        for idx, row in df_sonuc.iterrows():
             with cols[idx % 3]:
                 st.markdown(f"""
                 <div class="success-box">
@@ -221,17 +239,9 @@ if baslat:
                 <br>
                 """, unsafe_allow_html=True)
     else:
-        st.warning("😔 Hiçbir hisse bu stratejiye uymadı. Piyasa koşulları zorlu olabilir veya 'Dip Avcısı' gibi farklı bir strateji deneyebilirsin.")
-
+        st.warning("😔 Aradığınız kriterlere uygun hisse bulunamadı. Stratejiyi değiştirmeyi deneyin.")
+        
 else:
     c1, c2 = st.columns([1, 2])
     with c2:
-        st.markdown("""
-        ### 👋 Nasıl Çalışır?
-        1. **Pazarı Seç:** BIST 100, ABD Devleri veya BIST 30.
-        2. **Stratejini Belirle:**
-           - **Momentum Canavarı:** Yükseliş gücü yüksek olanlar.
-           - **Dip Avcısı:** Çok düşmüş, tepki vermesi muhtemel olanlar.
-           - **Trend Takipçisi:** Güvenli liman arayanlar.
-        3. **Başlat:** Robot senin yerine yüzlerce grafiğe bakar ve sonuçları getirir.
-        """)
+        st.info("👈 Başlamak için sol menüden Hisse Grubunu ve Stratejini seç.")
