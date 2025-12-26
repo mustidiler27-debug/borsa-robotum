@@ -5,110 +5,120 @@ import pandas_ta as ta
 import mplfinance as mpf
 import numpy as np
 from scipy.signal import argrelextrema
-import datetime
 
-# --- 1. MODERN AYARLAR & CSS STİL (FİNAL TASARIM) ---
+# --- 1. AYARLAR & NAVY BLUE TEMA ---
 st.set_page_config(
-    page_title="ProTrade Terminal",
+    page_title="ProTrade Navy",
     layout="wide",
     initial_sidebar_state="expanded",
-    page_icon="📈"
+    page_icon="💎"
 )
 
-# Özel CSS ile Arayüzü Güzelleştirme
+# MODERN NAVY CSS
 st.markdown("""
 <style>
-    /* Ana Arka Plan */
+    /* 1. Genel Arka Plan (Derin Lacivert) */
     .stApp {
-        background-color: #0E1117;
+        background-color: #0a192f;
+        color: #ccd6f6;
     }
     
-    /* Yan Menü (Sidebar) */
+    /* 2. Sol Menü (Daha Açık Lacivert) */
     [data-testid="stSidebar"] {
-        background-color: #161B22;
-        border-right: 1px solid #30363D;
+        background-color: #112240;
+        border-right: 1px solid #233554;
     }
     
-    /* Özel Başlık Stili */
+    /* 3. Başlık Stili */
     .main-header {
-        font-family: 'Helvetica Neue', sans-serif;
-        background: linear-gradient(90deg, #00C9FF 0%, #92FE9D 100%);
+        background: linear-gradient(90deg, #64ffda 0%, #5bc0be 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         font-weight: 800;
         font-size: 3rem;
         text-align: center;
-        margin-bottom: 20px;
-        text-shadow: 0px 0px 20px rgba(0, 201, 255, 0.5);
+        margin-bottom: 25px;
+        letter-spacing: 2px;
     }
     
-    /* Metrik Kartları (Dashboard) */
-    .dashboard-card {
-        background: linear-gradient(145deg, #1e293b, #0f172a);
-        border: 1px solid #334155;
-        border-radius: 15px;
+    /* 4. Metrik Kartları (Glassmorphism Navy) */
+    .metric-box {
+        background-color: #112240;
+        border: 1px solid #233554;
+        border-radius: 12px;
         padding: 20px;
         text-align: center;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
-        transition: transform 0.2s;
+        box-shadow: 0 10px 30px -15px rgba(2, 12, 27, 0.7);
+        transition: transform 0.3s ease;
     }
-    .dashboard-card:hover {
+    .metric-box:hover {
         transform: translateY(-5px);
-        border-color: #38bdf8;
+        border-color: #64ffda;
     }
-    .card-title {
-        color: #94a3b8;
-        font-size: 0.9rem;
+    .metric-label {
+        color: #8892b0;
+        font-size: 0.85rem;
         text-transform: uppercase;
         letter-spacing: 1px;
-        margin-bottom: 10px;
+        margin-bottom: 5px;
     }
-    .card-value {
-        color: #f8fafc;
+    .metric-value {
+        color: #e6f1ff;
         font-size: 1.8rem;
         font-weight: bold;
     }
-    .card-sub {
-        font-size: 0.8rem;
-        margin-top: 5px;
+    .metric-delta {
+        font-size: 0.9rem;
+        font-weight: 500;
     }
     
-    /* Buton Tasarımı */
+    /* 5. Buton Stili (Cyan Neon) */
     .stButton>button {
-        background: linear-gradient(45deg, #2563eb, #3b82f6);
-        color: white;
-        border: none;
-        border-radius: 10px;
-        padding: 15px 20px;
+        background: transparent;
+        color: #64ffda;
+        border: 1px solid #64ffda;
+        border-radius: 5px;
+        padding: 10px 20px;
         font-weight: bold;
-        width: 100%;
         transition: all 0.3s ease;
     }
     .stButton>button:hover {
-        background: linear-gradient(45deg, #1d4ed8, #2563eb);
-        box-shadow: 0 0 15px rgba(37, 99, 235, 0.5);
+        background-color: rgba(100, 255, 218, 0.1);
+        box-shadow: 0 0 15px rgba(100, 255, 218, 0.2);
+        border-color: #64ffda;
+        color: #64ffda;
     }
-
-    /* Tablo ve Tablar */
+    
+    /* 6. Tablo ve Sekmeler */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 10px;
-        background-color: transparent;
+        border-bottom: 1px solid #233554;
     }
     .stTabs [data-baseweb="tab"] {
-        height: 50px;
-        background-color: #1e293b;
-        border-radius: 10px;
-        color: white;
-        border: 1px solid #334155;
+        background-color: transparent;
+        color: #8892b0;
+        border: none;
     }
     .stTabs [aria-selected="true"] {
-        background-color: #3b82f6 !important;
-        border-color: #3b82f6 !important;
+        color: #64ffda !important;
+        border-bottom: 2px solid #64ffda !important;
+    }
+    
+    /* Input Alanları */
+    .stTextInput>div>div>input {
+        background-color: #0a192f;
+        color: #ccd6f6;
+        border: 1px solid #233554;
+    }
+    .stSelectbox>div>div>div {
+        background-color: #0a192f;
+        color: #ccd6f6;
+        border: 1px solid #233554;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 2. FONKSİYONLAR (MOTOR) ---
+# --- 2. HESAPLAMA MOTORU ---
 def formasyon_avcisi(df):
     bulgular, cizgiler = [], []
     try:
@@ -146,7 +156,6 @@ def verileri_getir(symbol, period):
         df['RSI'] = df.ta.rsi(close=df['Close'], length=14)
         df['EMA_21'] = df.ta.ema(close=df['Close'], length=21)
         df['EMA_55'] = df.ta.ema(close=df['Close'], length=55)
-        df['EMA_144'] = df.ta.ema(close=df['Close'], length=144)
         
         st_ind = df.ta.supertrend(high=df['High'], low=df['Low'], close=df['Close'], length=10, multiplier=3)
         if st_ind is not None:
@@ -167,196 +176,166 @@ def verileri_getir(symbol, period):
         return df
     except: return None
 
-# --- 3. YAN MENÜ TASARIMI ---
+# --- 3. YAN MENÜ (Modern Dropdown) ---
 with st.sidebar:
     st.markdown("""
-    <div style="text-align: center; padding: 20px 0;">
-        <h1 style="color: white; font-size: 24px; margin:0;">🚀 PROTRADE</h1>
-        <p style="color: #64748b; font-size: 12px;">Next Gen Analiz Terminali</p>
-    </div>
+    <h2 style='text-align: center; color: #64ffda; font-weight: 300; letter-spacing: 3px;'>NAVY<br><span style='font-weight:800'>TRADER</span></h2>
+    <hr style='border-color: #233554;'>
     """, unsafe_allow_html=True)
     
-    with st.container():
-        st.markdown("### ⚙️ Parametreler")
-        piyasa = st.selectbox("Borsa Seçin", ["🇹🇷 Borsa İstanbul (BIST)", "🇺🇸 NASDAQ / NYSE (ABD)"])
-        
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            varsayilan = "THYAO" if "BIST" in piyasa else "NVDA"
-            kod_giris = st.text_input("Hisse Sembolü", varsayilan)
-        with col2:
-            st.markdown("<br>", unsafe_allow_html=True) 
-        
-        st.markdown("### ⏱️ Zaman Dilimi")
-        secilen_etiket = st.pills("Periyot", ["3 Ay", "6 Ay", "YTD", "1 Yıl"], default="1 Yıl")
-        zaman_map = {"3 Ay": "3mo", "6 Ay": "6mo", "YTD": "ytd", "1 Yıl": "1y"}
-        periyot = zaman_map.get(secilen_etiket, "1y")
-        
-        st.markdown("---")
-        analiz_butonu = st.button("ANALİZİ BAŞLAT 🔥", use_container_width=True)
-        
-        st.markdown("""
-        <div style="position: fixed; bottom: 20px; left: 20px; font-size: 11px; color: #475569;">
-            v26.0 Stable • No AI Core
-        </div>
-        """, unsafe_allow_html=True)
+    # 1. Borsa Seçimi
+    piyasa = st.selectbox(
+        "📍 PAZAR SEÇİMİ",
+        ["🇹🇷 BIST (TL)", "🇺🇸 ABD (USD)"],
+        index=0
+    )
+    
+    # 2. Hisse Kodu
+    varsayilan = "THYAO" if "BIST" in piyasa else "NVDA"
+    kod_giris = st.text_input("🔍 HİSSE KODU", varsayilan)
+    
+    # 3. Zaman Dilimi (İstediğin gibi aşağı açılan menü)
+    st.write("") # Boşluk
+    secilen_etiket = st.selectbox(
+        "⏱️ ANALİZ PERİYODU",
+        ["3 Aylık", "6 Aylık", "Yılbaşından Bugüne (YTD)", "1 Yıllık", "2 Yıllık"],
+        index=3  # 1 Yıllık varsayılan
+    )
+    
+    zaman_map = {
+        "3 Aylık": "3mo", "6 Aylık": "6mo", 
+        "Yılbaşından Bugüne (YTD)": "ytd", 
+        "1 Yıllık": "1y", "2 Yıllık": "2y"
+    }
+    periyot = zaman_map[secilen_etiket]
+    
+    st.markdown("---")
+    analiz_butonu = st.button("ANALİZİ BAŞLAT", use_container_width=True)
 
-# --- 4. ANA SAYFA MANTIĞI ---
+# --- 4. ANA EKRAN ---
 
 if not analiz_butonu:
-    # --- KARŞILAMA EKRANI (Landing Page) ---
-    st.markdown('<div class="main-header">PROTRADE TERMINAL</div>', unsafe_allow_html=True)
+    # Karşılama Ekranı
+    st.markdown('<div class="main-header">PİYASA KONTROL MERKEZİ</div>', unsafe_allow_html=True)
     
     c1, c2, c3 = st.columns([1, 2, 1])
     with c2:
-        st.markdown("""
-        <div style="text-align: center; color: #94a3b8; font-size: 18px; margin-bottom: 40px;">
-            Profesyonel Teknik Analiz, Formasyon Avcısı ve Trend Takibi.<br>
-            Başlamak için sol menüden bir hisse seçin.
-        </div>
-        """, unsafe_allow_html=True)
-
-    # Örnek Gösterge Kartları (Statik)
-    k1, k2, k3 = st.columns(3)
-    k1.markdown("""
-    <div class="dashboard-card">
-        <div class="card-title">SİSTEM DURUMU</div>
-        <div class="card-value" style="color: #4ade80;">AKTİF 🟢</div>
-        <div class="card-sub">Veri Akışı Sağlanıyor</div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    k2.markdown("""
-    <div class="dashboard-card">
-        <div class="card-title">BIST 100</div>
-        <div class="card-value">GÜÇLÜ</div>
-        <div class="card-sub">Genel Piyasa Yönü</div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    k3.markdown("""
-    <div class="dashboard-card">
-        <div class="card-title">MOTOR</div>
-        <div class="card-value" style="color: #38bdf8;">V26</div>
-        <div class="card-sub">Saf Teknik Analiz</div>
-    </div>
-    """, unsafe_allow_html=True)
+        st.info("👋 Sol menüden hisse kodunu gir ve 'ANALİZİ BAŞLAT' butonuna bas.")
 
 else:
-    # --- ANALİZ SONUÇ EKRANI ---
+    # Analiz Ekranı
     ham_kod = kod_giris.upper().strip().replace(".IS", "")
     sembol = f"{ham_kod}.IS" if "BIST" in piyasa else ham_kod
     para_birimi = "₺" if "BIST" in piyasa else "$"
 
-    with st.spinner('Piyasa verileri işleniyor...'):
+    with st.spinner('Veriler sunucudan çekiliyor...'):
         df = verileri_getir(sembol, periyot)
         
         if df is None:
-            st.error("⚠️ Veri alınamadı. Hisse kodunu kontrol edin.")
+            st.error("⚠️ Veri bulunamadı.")
         else:
             son = df.iloc[-1]
             onceki = df.iloc[-2]
-            degisim = ((son['Close'] - onceki['Close']) / onceki['Close']) * 100
-            degisim_renk = "#4ade80" if degisim > 0 else "#f87171"
+            yuzde = ((son['Close'] - onceki['Close']) / onceki['Close']) * 100
+            renk_delta = "#64ffda" if yuzde > 0 else "#ff6b6b"
             
             formasyonlar, cizgiler = formasyon_avcisi(df)
             
-            # Ana Başlık
-            st.markdown(f'<div class="main-header">{ham_kod} ANALİZİ</div>', unsafe_allow_html=True)
-
-            # --- MODERN METRİK KARTLARI ---
-            m1, m2, m3, m4 = st.columns(4)
+            # Başlık
+            st.markdown(f'<div class="main-header">{ham_kod} TEKNİK BAKIŞ</div>', unsafe_allow_html=True)
             
-            # Fiyat Kartı
-            m1.markdown(f"""
-            <div class="dashboard-card">
-                <div class="card-title">SON FİYAT</div>
-                <div class="card-value">{son['Close']:.2f} {para_birimi}</div>
-                <div class="card-sub" style="color: {degisim_renk};">%{degisim:.2f} Değişim</div>
+            # --- KARTLAR (NAVY STYLE) ---
+            k1, k2, k3, k4 = st.columns(4)
+            
+            # 1. Fiyat
+            k1.markdown(f"""
+            <div class="metric-box">
+                <div class="metric-label">Son Fiyat</div>
+                <div class="metric-value">{son['Close']:.2f} {para_birimi}</div>
+                <div class="metric-delta" style="color: {renk_delta};">%{yuzde:.2f}</div>
             </div>
             """, unsafe_allow_html=True)
             
-            # RSI Kartı
+            # 2. RSI
             rsi_val = son.get('RSI', 50)
-            rsi_renk = "#f87171" if rsi_val > 70 else "#4ade80" if rsi_val < 30 else "#facc15"
-            m2.markdown(f"""
-            <div class="dashboard-card">
-                <div class="card-title">RSI (GÜÇ)</div>
-                <div class="card-value" style="color: {rsi_renk}">{rsi_val:.1f}</div>
-                <div class="card-sub">Momentum Durumu</div>
+            rsi_color = "#ff6b6b" if rsi_val > 70 else "#64ffda" if rsi_val < 30 else "#ccd6f6"
+            k2.markdown(f"""
+            <div class="metric-box">
+                <div class="metric-label">RSI Göstergesi</div>
+                <div class="metric-value" style="color: {rsi_color}">{rsi_val:.1f}</div>
+                <div class="metric-delta">Momentum</div>
             </div>
             """, unsafe_allow_html=True)
             
-            # Trend Kartı
+            # 3. Trend
             trend_yon = son.get('TrendYon')
-            trend_text = "YÜKSELİŞ 🚀" if trend_yon == 1 else "DÜŞÜŞ 🔻"
-            trend_color = "#4ade80" if trend_yon == 1 else "#f87171"
-            m3.markdown(f"""
-            <div class="dashboard-card">
-                <div class="card-title">TREND (SuperTrend)</div>
-                <div class="card-value" style="color: {trend_color}">{trend_text}</div>
-                <div class="card-sub">Ana Yön</div>
+            trend_text = "YÜKSELİŞ" if trend_yon == 1 else "DÜŞÜŞ"
+            trend_color = "#64ffda" if trend_yon == 1 else "#ff6b6b"
+            k3.markdown(f"""
+            <div class="metric-box">
+                <div class="metric-label">Trend Yönü</div>
+                <div class="metric-value" style="color: {trend_color}">{trend_text}</div>
+                <div class="metric-delta">SuperTrend</div>
             </div>
             """, unsafe_allow_html=True)
             
-            # Sinyal Kartı
+            # 4. Sinyal
             macd = son.get('MACD', 0)
-            signal = son.get('SIGNAL', 0)
-            macd_durum = "AL ✅" if macd > signal else "SAT ❌"
-            m4.markdown(f"""
-            <div class="dashboard-card">
-                <div class="card-title">MACD SİNYALİ</div>
-                <div class="card-value">{macd_durum}</div>
-                <div class="card-sub">{macd:.2f} / {signal:.2f}</div>
+            sig = son.get('SIGNAL', 0)
+            durum = "AL" if macd > sig else "SAT"
+            durum_renk = "#64ffda" if macd > sig else "#ff6b6b"
+            k4.markdown(f"""
+            <div class="metric-box">
+                <div class="metric-label">MACD Sinyali</div>
+                <div class="metric-value" style="color: {durum_renk}">{durum}</div>
+                <div class="metric-delta">Kesişim</div>
             </div>
             """, unsafe_allow_html=True)
             
             st.markdown("<br>", unsafe_allow_html=True)
-
-            # --- GRAFİK SEKMELERİ ---
-            tab1, tab2 = st.tabs(["📊 PROFESYONEL GRAFİK", "🔍 DETAYLI FORMASYONLAR"])
+            
+            # --- GRAFİK ---
+            tab1, tab2 = st.tabs(["📊 GRAFİK ANALİZİ", "⚡ FORMASYON SİNYALLERİ"])
             
             with tab1:
                 plot_len = min(len(df), 150)
                 plot_df = df.iloc[-plot_len:]
                 add_plots = []
                 
-                # İndikatör Çizgileri
+                # EMA
                 if 'EMA_21' in plot_df.columns: 
-                    add_plots.append(mpf.make_addplot(plot_df['EMA_21'], color='#f59e0b', width=1.5)) # Turuncu
+                    add_plots.append(mpf.make_addplot(plot_df['EMA_21'], color='#f1c40f', width=1.5))
                 if 'EMA_55' in plot_df.columns: 
-                    add_plots.append(mpf.make_addplot(plot_df['EMA_55'], color='#3b82f6', width=2))   # Mavi
+                    add_plots.append(mpf.make_addplot(plot_df['EMA_55'], color='#3498db', width=2))
                 
                 # Bollinger
                 if 'BB_UPPER' in plot_df.columns:
-                    add_plots.append(mpf.make_addplot(plot_df['BB_UPPER'], color='gray', linestyle='--', alpha=0.5))
-                    add_plots.append(mpf.make_addplot(plot_df['BB_LOWER'], color='gray', linestyle='--', alpha=0.5))
+                    add_plots.append(mpf.make_addplot(plot_df['BB_UPPER'], color='#8892b0', linestyle='--', alpha=0.6))
+                    add_plots.append(mpf.make_addplot(plot_df['BB_LOWER'], color='#8892b0', linestyle='--', alpha=0.6))
                 
                 # SuperTrend
                 if 'SuperTrend' in plot_df.columns:
-                    colors = ['#4ade80' if x==1 else '#f87171' for x in plot_df['TrendYon']]
-                    add_plots.append(mpf.make_addplot(plot_df['SuperTrend'], type='scatter', markersize=30, color=colors))
+                    colors = ['#64ffda' if x==1 else '#ff6b6b' for x in plot_df['TrendYon']]
+                    add_plots.append(mpf.make_addplot(plot_df['SuperTrend'], type='scatter', color=colors))
                 
                 # Formasyonlar
                 if cizgiler:
                     for s, r in cizgiler:
-                        add_plots.append(mpf.make_addplot([s]*len(plot_df), color=r, linestyle='-.', width=2))
+                        line_col = '#64ffda' if r=='green' else '#ff6b6b'
+                        add_plots.append(mpf.make_addplot([s]*len(plot_df), color=line_col, linestyle='-.', width=2))
                 
-                # Alt Paneller
+                # Paneller
                 if 'RSI' in plot_df.columns:
-                    add_plots.append(mpf.make_addplot(plot_df['RSI'], panel=2, color='#a855f7', ylabel='RSI', ylim=(0,100)))
-                    # RSI 30-70 çizgileri (Manuel çizgi yerine panel ayarı daha temiz durur ama şimdilik sade kalsın)
+                     add_plots.append(mpf.make_addplot(plot_df['RSI'], panel=2, color='#bd93f9', ylabel='RSI'))
 
-                # Modern Grafik Teması
+                # Grafik Teması
                 fig, _ = mpf.plot(plot_df, type='candle', style='nightclouds', 
                                   addplot=add_plots, volume=True, 
                                   panel_ratios=(4, 1, 1), 
                                   returnfig=True, figsize=(12, 8),
                                   tight_layout=True)
-                
                 st.pyplot(fig)
-                st.caption("🔵 Mavi: EMA 55 (Ana Trend) | 🟠 Turuncu: EMA 21 (Hızlı Trend)")
-
+            
             with tab2:
                 if formasyonlar:
                     for f in formasyonlar:
@@ -365,4 +344,4 @@ else:
                         else:
                             st.error(f"### {f['tur']}\n{f['mesaj']}")
                 else:
-                    st.info("Bu periyotta belirgin bir 'İkili Tepe' veya 'İkili Dip' formasyonu tespit edilmedi.")
+                    st.info("Bu periyotta temiz bir formasyon oluşumu yok.")
