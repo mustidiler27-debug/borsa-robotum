@@ -6,14 +6,13 @@ import mplfinance as mpf
 import numpy as np
 from scipy.signal import argrelextrema
 
-# --- 1. AYARLAR & CSS STİL (MODERNLEŞTİRME) ---
+# --- 1. AYARLAR & STİL ---
 st.set_page_config(
-    page_title="ProTrade V15 - Ultra Modern",
+    page_title="ProTrade V16 - Modern UI",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# MODERN CSS ENJEKSİYONU
 st.markdown("""
 <style>
     /* Sol Menü Arka Planı */
@@ -30,19 +29,6 @@ st.markdown("""
         box-shadow: 0 4px 6px rgba(0,0,0,0.3);
         margin-bottom: 10px;
     }
-    /* Tab Başlıkları */
-    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
-    .stTabs [data-baseweb="tab"] {
-        height: 45px;
-        border-radius: 8px;
-        background-color: #161b22;
-        color: #ffffff;
-        border: 1px solid #30363d;
-    }
-    .stTabs [aria-selected="true"] {
-        background-color: #238636 !important; /* Yeşil Seçim */
-        color: white !important;
-    }
     /* Başlık Gradyanı */
     .gradient-text {
         background: -webkit-linear-gradient(45deg, #00C9FF, #92FE9D);
@@ -50,6 +36,19 @@ st.markdown("""
         -webkit-text-fill-color: transparent;
         font-weight: bold;
         font-size: 30px;
+    }
+    /* Tab Tasarımı */
+    .stTabs [data-baseweb="tab-list"] { gap: 8px; }
+    .stTabs [data-baseweb="tab"] {
+        height: 40px;
+        border-radius: 8px;
+        background-color: #161b22;
+        border: 1px solid #30363d;
+        color: white;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #238636 !important;
+        border-color: #238636 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -60,7 +59,6 @@ def formasyon_avcisi(df):
     cizgiler = [] 
     try:
         son = df.iloc[-1]
-        # İkili Tepe/Dip
         n = 5
         df['Yerel_Max'] = df.iloc[argrelextrema(df['High'].values, np.greater_equal, order=n)[0]]['High']
         df['Yerel_Min'] = df.iloc[argrelextrema(df['Low'].values, np.less_equal, order=n)[0]]['Low']
@@ -68,27 +66,29 @@ def formasyon_avcisi(df):
         son_tepeler = df['Yerel_Max'].dropna().tail(2)
         son_dipler = df['Yerel_Min'].dropna().tail(2)
 
+        # İkili Tepe
         if len(son_tepeler) >= 2:
-            tepe1, tepe2 = son_tepeler.iloc[-2], son_tepeler.iloc[-1]
-            if abs(tepe1 - tepe2) / tepe1 < 0.04 and tepe2 > (son['Close'] * 0.95):
-                bulgular.append({"tur": "⛰️ İKİLİ TEPE", "mesaj": "Direnç oluştu, düşüş riski."})
-                cizgiler.append((tepe2, 'red'))
+            t1, t2 = son_tepeler.iloc[-2], son_tepeler.iloc[-1]
+            if abs(t1 - t2) / t1 < 0.04 and t2 > (son['Close'] * 0.95):
+                bulgular.append({"tur": "⛰️ İKİLİ TEPE", "mesaj": f"Direnç ({t2:.2f}) aşılamıyor."})
+                cizgiler.append((t2, 'red'))
 
+        # İkili Dip
         if len(son_dipler) >= 2:
-            dip1, dip2 = son_dipler.iloc[-2], son_dipler.iloc[-1]
-            if abs(dip1 - dip2) / dip1 < 0.04 and dip2 < (son['Close'] * 1.05):
-                bulgular.append({"tur": "✅ İKİLİ DİP", "mesaj": "Destek oluştu, yükseliş ihtimali."})
-                cizgiler.append((dip2, 'green'))
+            d1, d2 = son_dipler.iloc[-2], son_dipler.iloc[-1]
+            if abs(d1 - d2) / d1 < 0.04 and d2 < (son['Close'] * 1.05):
+                bulgular.append({"tur": "✅ İKİLİ DİP", "mesaj": f"Destek ({d2:.2f}) çalışıyor."})
+                cizgiler.append((d2, 'green'))
 
         # Sıkışma
         if (son['BB_UPPER'] - son['BB_LOWER']) / son['BB_UPPER'] < 0.12:
-            bulgular.append({"tur": "⚠️ SIKIŞMA (ÜÇGEN)", "mesaj": "Sert kırılım yaklaşıyor."})
+            bulgular.append({"tur": "⚠️ SIKIŞMA (ÜÇGEN)", "mesaj": "Sert kırılım (Patlama) çok yakın."})
 
         # Mumlar
         onceki = df.iloc[-2]
         if (onceki['Close'] < onceki['Open']) and (son['Close'] > son['Open']) and \
            (son['Open'] < onceki['Close']) and (son['Close'] > onceki['Open']):
-            bulgular.append({"tur": "🐂 YUTAN BOĞA", "mesaj": "Güçlü dönüş sinyali."})
+            bulgular.append({"tur": "🐂 YUTAN BOĞA", "mesaj": "Güçlü yükseliş sinyali."})
             
     except: pass
     return bulgular, cizgiler
@@ -107,14 +107,20 @@ def verileri_getir(symbol, period):
         ticker = yf.Ticker(symbol)
         df = ticker.history(period=period)
         if df.empty: return None
+        
+        # Temizlik
         df.columns = [c if isinstance(c, str) else c[0] for c in df.columns]
         df.index = df.index.tz_localize(None)
         
         rows = len(df)
+        
+        # EMA Hesapla (Veri yetiyorsa)
         for ema in [21, 50, 144, 200, 610]:
             df[f'EMA_{ema}'] = df.ta.ema(close=df['Close'], length=ema) if rows > ema else np.nan
 
+        # İndikatörler
         df['RSI'] = df.ta.rsi(close=df['Close'], length=14)
+        
         macd = df.ta.macd(close=df['Close'], fast=12, slow=26, signal=9)
         if macd is not None:
             df = df.join(macd)
@@ -132,6 +138,7 @@ def verileri_getir(symbol, period):
             df['TrendYon'] = st_ind[st_ind.columns[1]]
 
         df['CMF'] = df.ta.cmf(high=df['High'], low=df['Low'], close=df['Close'], volume=df['Volume'], length=20)
+        
         return df
     except: return None
 
@@ -139,7 +146,8 @@ def puan_hesapla(df):
     puan = 0
     try:
         son = df.iloc[-1]
-        if son['Close'] > son.get('EMA_144', 999999): puan += 25
+        # EMA 144 (Sadece veri varsa kontrol et)
+        if not pd.isna(son.get('EMA_144')) and son['Close'] > son['EMA_144']: puan += 25
         if son.get('TrendYon') == 1: puan += 25
         if son.get('MACD', 0) > son.get('SIGNAL', 0): puan += 15
         if 30 < son.get('RSI', 50) < 70: puan += 15
@@ -149,28 +157,40 @@ def puan_hesapla(df):
 
 # --- 3. MODERN SOL MENÜ ---
 with st.sidebar:
-    # Logo / Başlık Alanı
     st.markdown('<p class="gradient-text">ProTrade AI</p>', unsafe_allow_html=True)
     st.markdown("---")
     
-    # Modern Ayar Kutusu
     with st.expander("🛠️ Analiz Ayarları", expanded=True):
-        piyasa = st.selectbox("Piyasa Seçimi", ["🇹🇷 BIST (TL)", "🇺🇸 ABD (USD)"])
+        piyasa = st.selectbox("Piyasa", ["🇹🇷 BIST (TL)", "🇺🇸 ABD (USD)"])
         
         if piyasa == "🇹🇷 BIST (TL)":
-            kod_giris = st.text_input("Hisse Kodu", "THYAO", help="BIST kodunu girin (Örn: GARAN)")
+            kod_giris = st.text_input("Hisse Kodu", "THYAO")
         else:
-            kod_giris = st.text_input("Hisse Kodu", "NVDA", help="ABD kodunu girin (Örn: AAPL)")
+            kod_giris = st.text_input("Hisse Kodu", "NVDA")
             
-        periyot = st.select_slider("Zaman Dilimi", options=["6mo", "1y", "2y", "5y"], value="1y")
+        st.write("⏱️ **Zaman Dilimi:**")
+        
+        # --- MODERN ZAMAN SEÇİCİ (PILLS / HAP BUTONLAR) ---
+        # Görünür isimler ile kodların eşleşmesi
+        zaman_secenekleri = ["3 Ay", "6 Ay", "YTD", "1 Yıl", "2 Yıl", "5 Yıl"]
+        secilen_etiket = st.pills("Periyot", zaman_secenekleri, default="1 Yıl", selection_mode="single")
+        
+        # Etiketi kodlara çevirelim
+        zaman_map = {
+            "3 Ay": "3mo",
+            "6 Ay": "6mo",
+            "YTD": "ytd",
+            "1 Yıl": "1y",
+            "2 Yıl": "2y",
+            "5 Yıl": "5y"
+        }
+        periyot = zaman_map[secilen_etiket]
 
-    # Büyük Buton
     analiz_butonu = st.button("ANALİZİ BAŞLAT 🚀", use_container_width=True, type="primary")
     
-    # Alt Bilgi
     st.markdown("---")
     st.caption("🟢 Sistem: **ONLİNE**")
-    st.caption("🤖 Model: **v15.0 Hunter**")
+    st.caption("📅 YTD: Yılbaşından Bugüne")
 
 # --- 4. ANA EKRAN ---
 if analiz_butonu:
@@ -178,21 +198,24 @@ if analiz_butonu:
     sembol = f"{ham_kod}.IS" if piyasa == "🇹🇷 BIST (TL)" else ham_kod
     para_birimi = "TL" if piyasa == "🇹🇷 BIST (TL)" else "$"
 
-    with st.spinner('Yapay zeka piyasayı tarıyor...'):
+    with st.spinner('Yapay zeka analiz yapıyor...'):
         df = verileri_getir(sembol, periyot)
         
         if df is None:
-            st.error(f"❌ {sembol} bulunamadı.")
+            st.error(f"❌ {sembol} bulunamadı veya veri çok eksik.")
         else:
             son = df.iloc[-1]
-            onceki = df.iloc[-2]
+            # Önceki gün verisi yoksa hata vermemesi için kontrol
+            onceki = df.iloc[-2] if len(df) > 1 else son
+            
             puan = puan_hesapla(df)
             formasyonlar, cizgiler = formasyon_avcisi(df) 
             P, R1, R2, S1, S2 = pivot_hesapla(df)
 
-            # MODERN METRİK KARTLARI
+            # METRİK KARTLARI
             k1, k2, k3, k4 = st.columns(4)
-            k1.markdown(f"""<div class="metric-card"><h3>Fiyat</h3><h2>{son['Close']:.2f} {para_birimi}</h2><p>{son['Close']-onceki['Close']:.2f} değişim</p></div>""", unsafe_allow_html=True)
+            degisim = son['Close'] - onceki['Close']
+            k1.markdown(f"""<div class="metric-card"><h3>Fiyat</h3><h2>{son['Close']:.2f} {para_birimi}</h2><p>{degisim:.2f} değişim</p></div>""", unsafe_allow_html=True)
             
             puan_renk = "#4CAF50" if puan > 70 else "#FF9800"
             k2.markdown(f"""<div class="metric-card"><h3>AI Puanı</h3><h2 style="color:{puan_renk}">{puan}/100</h2></div>""", unsafe_allow_html=True)
@@ -203,7 +226,7 @@ if analiz_butonu:
             para_icon = "💰 GİRİŞ" if son.get('CMF', 0)>0 else "💸 ÇIKIŞ"
             k4.markdown(f"""<div class="metric-card"><h3>Para Akışı</h3><h2>{para_icon}</h2></div>""", unsafe_allow_html=True)
             
-            st.write("") # Boşluk
+            st.write("")
 
             # SEKMELER
             tab_genel, tab_indikator, tab_formasyon = st.tabs(["📊 GENEL BAKIŞ", "📈 İNDİKATÖRLER", "🕵️‍♂️ FORMASYONLAR"])
@@ -212,10 +235,16 @@ if analiz_butonu:
             with tab_genel:
                 col_g1, col_g2 = st.columns([3, 1])
                 with col_g1:
-                    plot_df = df.iloc[-150:]
+                    # Grafik çizimi için son verileri al (maksimum 150 gün)
+                    plot_len = min(len(df), 150)
+                    plot_df = df.iloc[-plot_len:]
+                    
                     add_plots = []
-                    if 'EMA_144' in plot_df.columns: add_plots.append(mpf.make_addplot(plot_df['EMA_144'], color='blue', width=2))
-                    if 'EMA_610' in plot_df.columns: add_plots.append(mpf.make_addplot(plot_df['EMA_610'], color='purple', width=2.5))
+                    # Sadece verisi olan çizgileri ekle (NaN hatasını önlemek için)
+                    if 'EMA_144' in plot_df.columns and not plot_df['EMA_144'].isnull().all():
+                        add_plots.append(mpf.make_addplot(plot_df['EMA_144'], color='blue', width=2))
+                    if 'EMA_610' in plot_df.columns and not plot_df['EMA_610'].isnull().all():
+                        add_plots.append(mpf.make_addplot(plot_df['EMA_610'], color='purple', width=2.5))
                     if 'SuperTrend' in plot_df.columns:
                         colors = ['green' if x==1 else 'red' for x in plot_df['TrendYon']]
                         add_plots.append(mpf.make_addplot(plot_df['SuperTrend'], type='scatter', color=colors))
@@ -240,11 +269,15 @@ if analiz_butonu:
             with tab_indikator:
                 c1, c2 = st.columns(2)
                 with c1:
-                    st.info(f"**MACD:** {son.get('MACD',0):.2f} / Sinyal: {son.get('SIGNAL',0):.2f}")
+                    st.info(f"**MACD:** {son.get('MACD',0):.2f}")
                     st.info(f"**RSI:** {son.get('RSI',0):.2f}")
                 with c2:
                     st.success(f"**Para Akışı (CMF):** {son.get('CMF',0):.2f}")
-                    st.warning(f"**Altın Destek (144):** {son.get('EMA_144',0):.2f}")
+                    ema144 = son.get('EMA_144')
+                    if not pd.isna(ema144):
+                        st.warning(f"**Altın Destek (144):** {ema144:.2f}")
+                    else:
+                        st.warning("**Altın Destek:** Veri yetersiz")
 
             # 3. SEKME
             with tab_formasyon:
@@ -258,5 +291,4 @@ if analiz_butonu:
                     st.info("Temiz grafik. Belirgin formasyon yok.")
 
 else:
-    # Boş ekranda karşılama mesajı
     st.info("👈 Analize başlamak için sol menüyü kullanın.")
