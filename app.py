@@ -8,7 +8,7 @@ import google.generativeai as genai
 from scipy.signal import argrelextrema
 
 # --- 1. AYARLAR ---
-st.set_page_config(page_title="ProTrade V21 - AutoLogin", layout="wide")
+st.set_page_config(page_title="ProTrade V22 - Final Fix", layout="wide")
 
 st.markdown("""
 <style>
@@ -28,14 +28,15 @@ def gemini_ile_yorumla(api_key, sembol, son_fiyat, rsi, macd, sinyal, cmf, ema_d
     if not api_key: return "⚠️ API Anahtarı eksik."
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-pro')
+        # GÜNCELLEME: Model ismi 'gemini-1.5-flash' yapıldı. En güncel ve hızlısı bu.
+        model = genai.GenerativeModel('gemini-1.5-flash')
         prompt = f"""
         Borsa uzmanı olarak '{sembol}' hissesini teknik verilere göre yorumla.
         VERİLER: Fiyat: {son_fiyat}, Trend: {trend}, RSI: {rsi:.2f}, MACD: {macd:.4f}, CMF: {cmf:.2f}, Ortalamalar: {ema_durumu}
         Kısa, net, yatırımcı dilinde 3 madde:
         1. Genel Görünüm
         2. Kritik Sinyaller
-        3. Sonuç
+        3. Sonuç (Olumlu/Olumsuz)
         """
         response = model.generate_content(prompt)
         return response.text
@@ -95,11 +96,10 @@ def verileri_getir(symbol, period):
         return df
     except: return None
 
-# --- 4. ARAYÜZ (OTOMATİK GİRİŞ EKLENDİ) ---
+# --- 4. ARAYÜZ ---
 with st.sidebar:
     st.header("🤖 ProTrade AI")
     
-    # --- BURASI DEĞİŞTİ: Önce Kasaya Bak ---
     api_key = None
     if "GEMINI_KEY" in st.secrets:
         api_key = st.secrets["GEMINI_KEY"]
@@ -107,7 +107,6 @@ with st.sidebar:
     else:
         with st.expander("🔑 Giriş Yap", expanded=True):
             api_key = st.text_input("Gemini API Key", type="password")
-    # ---------------------------------------
     
     piyasa = st.selectbox("Piyasa", ["🇹🇷 BIST (TL)", "🇺🇸 ABD (USD)"])
     kod_giris = st.text_input("Hisse Kodu", "THYAO" if piyasa == "🇹🇷 BIST (TL)" else "NVDA")
@@ -140,7 +139,7 @@ if analiz_butonu:
 
             gemini_yorumu = ""
             if api_key:
-                with st.spinner('Gemini yazıyor...'):
+                with st.spinner('Gemini piyasayı okuyor...'):
                     gemini_yorumu = gemini_ile_yorumla(api_key, sembol, son['Close'], rsi, macd, son.get('SIGNAL',0), cmf, ema_durumu, trend)
             else:
                 gemini_yorumu = "Anahtar girilmedi."
