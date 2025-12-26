@@ -4,11 +4,11 @@ import pandas as pd
 import pandas_ta as ta
 import mplfinance as mpf
 import numpy as np
-import google.generativeai as genai  # GEMINI KÜTÜPHANESİ
+import google.generativeai as genai
 from scipy.signal import argrelextrema
 
 # --- 1. AYARLAR ---
-st.set_page_config(page_title="ProTrade V20.1 - Gemini Fix", layout="wide")
+st.set_page_config(page_title="ProTrade V21 - AutoLogin", layout="wide")
 
 st.markdown("""
 <style>
@@ -23,67 +23,47 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 2. GEMINI YORUMCUSU (MODEL GÜNCELLENDİ) ---
+# --- 2. GEMINI ---
 def gemini_ile_yorumla(api_key, sembol, son_fiyat, rsi, macd, sinyal, cmf, ema_durumu, trend):
-    if not api_key:
-        return "⚠️ Lütfen sol menüden Google Gemini API Anahtarınızı girin."
-    
+    if not api_key: return "⚠️ API Anahtarı eksik."
     try:
-        # API Anahtarını Ayarla
         genai.configure(api_key=api_key)
-        
-        # DÜZELTME BURADA: 'gemini-1.5-flash' yerine 'gemini-pro' kullanıyoruz.
-        # 'gemini-pro' en kararlı ve yaygın modeldir.
         model = genai.GenerativeModel('gemini-pro')
-        
         prompt = f"""
-        Sen uzman bir borsa analistisin. Aşağıdaki teknik verilere göre '{sembol}' hissesi için kısa ve net bir yorum yaz.
-        Sadece teknik analize odaklan.
-        
-        VERİLER:
-        - Fiyat: {son_fiyat}
-        - Trend: {trend}
-        - RSI (14): {rsi:.2f}
-        - MACD Durumu: {macd:.4f} (Sinyal: {sinyal:.4f})
-        - Para Akışı (CMF): {cmf:.2f}
-        - Hareketli Ortalamalar: {ema_durumu}
-        
-        Lütfen şu formatta yaz:
-        1. Genel Trend Yorumu
-        2. İndikatör Sinyalleri
-        3. Sonuç (Olumlu/Olumsuz)
+        Borsa uzmanı olarak '{sembol}' hissesini teknik verilere göre yorumla.
+        VERİLER: Fiyat: {son_fiyat}, Trend: {trend}, RSI: {rsi:.2f}, MACD: {macd:.4f}, CMF: {cmf:.2f}, Ortalamalar: {ema_durumu}
+        Kısa, net, yatırımcı dilinde 3 madde:
+        1. Genel Görünüm
+        2. Kritik Sinyaller
+        3. Sonuç
         """
-        
         response = model.generate_content(prompt)
         return response.text
-    except Exception as e:
-        return f"Hata: Gemini bağlantı sorunu. ({e})"
+    except Exception as e: return f"Hata: {e}"
 
-# --- 3. DİĞER FONKSİYONLAR ---
+# --- 3. TEKNİK ---
 def formasyon_avcisi(df):
-    bulgular = []
-    cizgiler = [] 
+    bulgular, cizgiler = [], []
     try:
         son = df.iloc[-1]
         n = 5
         df['Yerel_Max'] = df.iloc[argrelextrema(df['High'].values, np.greater_equal, order=n)[0]]['High']
         df['Yerel_Min'] = df.iloc[argrelextrema(df['Low'].values, np.less_equal, order=n)[0]]['Low']
         
-        son_tepeler = df['Yerel_Max'].dropna().tail(2)
-        son_dipler = df['Yerel_Min'].dropna().tail(2)
+        t = df['Yerel_Max'].dropna().tail(2)
+        d = df['Yerel_Min'].dropna().tail(2)
 
-        if len(son_tepeler) >= 2:
-            t1, t2 = son_tepeler.iloc[-2], son_tepeler.iloc[-1]
+        if len(t) >= 2:
+            t1, t2 = t.iloc[-2], t.iloc[-1]
             if abs(t1 - t2) / t1 < 0.05 and t2 > (son['Close'] * 0.95):
-                bulgular.append({"tur": "⛰️ İKİLİ TEPE", "mesaj": f"Direnç ({t2:.2f}) aşılamıyor."})
+                bulgular.append({"tur": "⛰️ İKİLİ TEPE", "mesaj": f"Direnç ({t2:.2f}) oluştu."})
                 cizgiler.append((float(t2), 'red'))
 
-        if len(son_dipler) >= 2:
-            d1, d2 = son_dipler.iloc[-2], son_dipler.iloc[-1]
+        if len(d) >= 2:
+            d1, d2 = d.iloc[-2], d.iloc[-1]
             if abs(d1 - d2) / d1 < 0.05 and d2 < (son['Close'] * 1.05):
-                bulgular.append({"tur": "✅ İKİLİ DİP", "mesaj": f"Destek ({d2:.2f}) çalışıyor."})
+                bulgular.append({"tur": "✅ İKİLİ DİP", "mesaj": f"Destek ({d2:.2f}) oluştu."})
                 cizgiler.append((float(d2), 'green'))
-            
     except: pass
     return bulgular, cizgiler
 
@@ -106,11 +86,6 @@ def verileri_getir(symbol, period):
             cols = df.columns
             df.rename(columns={cols[-3]: 'MACD', cols[-1]: 'SIGNAL'}, inplace=True)
             
-        bbands = df.ta.bbands(close=df['Close'], length=20, std=2)
-        if bbands is not None:
-            df = df.join(bbands)
-            df.rename(columns={df.columns[-3]: 'BB_LOWER', df.columns[-1]: 'BB_UPPER'}, inplace=True)
-            
         st_ind = df.ta.supertrend(high=df['High'], low=df['Low'], close=df['Close'], length=10, multiplier=3)
         if st_ind is not None:
             df['SuperTrend'] = st_ind[st_ind.columns[0]]
@@ -120,18 +95,24 @@ def verileri_getir(symbol, period):
         return df
     except: return None
 
-# --- 4. ARAYÜZ ---
+# --- 4. ARAYÜZ (OTOMATİK GİRİŞ EKLENDİ) ---
 with st.sidebar:
     st.header("🤖 ProTrade AI")
     
-    with st.expander("🔑 API Anahtarı", expanded=True):
-        api_key = st.text_input("Gemini API Key", type="password", help="aistudio.google.com'dan alabilirsin")
+    # --- BURASI DEĞİŞTİ: Önce Kasaya Bak ---
+    api_key = None
+    if "GEMINI_KEY" in st.secrets:
+        api_key = st.secrets["GEMINI_KEY"]
+        st.success("🔑 API Anahtarı Kayıtlı!")
+    else:
+        with st.expander("🔑 Giriş Yap", expanded=True):
+            api_key = st.text_input("Gemini API Key", type="password")
+    # ---------------------------------------
     
     piyasa = st.selectbox("Piyasa", ["🇹🇷 BIST (TL)", "🇺🇸 ABD (USD)"])
     kod_giris = st.text_input("Hisse Kodu", "THYAO" if piyasa == "🇹🇷 BIST (TL)" else "NVDA")
     
-    zaman_secenekleri = ["3 Ay", "6 Ay", "YTD", "1 Yıl"]
-    secilen_etiket = st.pills("Periyot", zaman_secenekleri, default="1 Yıl")
+    secilen_etiket = st.pills("Periyot", ["3 Ay", "6 Ay", "YTD", "1 Yıl"], default="1 Yıl")
     zaman_map = {"3 Ay": "3mo", "6 Ay": "6mo", "YTD": "ytd", "1 Yıl": "1y"}
     periyot = zaman_map.get(secilen_etiket, "1y")
     
@@ -142,48 +123,39 @@ if analiz_butonu:
     sembol = f"{ham_kod}.IS" if piyasa == "🇹🇷 BIST (TL)" else ham_kod
     para_birimi = "TL" if piyasa == "🇹🇷 BIST (TL)" else "$"
 
-    with st.spinner('Veriler çekiliyor...'):
+    with st.spinner('Analiz yapılıyor...'):
         df = verileri_getir(sembol, periyot)
-        
         if df is None:
-            st.error("Veri bulunamadı.")
+            st.error("Veri yok.")
         else:
             son = df.iloc[-1]
             onceki = df.iloc[-2] if len(df)>1 else son
             formasyonlar, cizgiler = formasyon_avcisi(df)
             
-            # Verileri hazırla
             rsi = son.get('RSI', 50)
             macd = son.get('MACD', 0)
-            sinyal = son.get('SIGNAL', 0)
             cmf = son.get('CMF', 0)
-            ema_durumu = "Pozitif (Fiyat > EMA144)" if son['Close'] > son.get('EMA_144', 999999) else "Negatif (Fiyat < EMA144)"
-            trend_yonu = "Yükseliş" if son.get('TrendYon') == 1 else "Düşüş"
+            ema_durumu = "Pozitif" if son['Close'] > son.get('EMA_144', 999999) else "Negatif"
+            trend = "Yükseliş" if son.get('TrendYon') == 1 else "Düşüş"
 
-            # GEMINI ÇAĞIRMA
             gemini_yorumu = ""
             if api_key:
-                with st.spinner('Gemini piyasayı okuyor... 🧠'):
-                    gemini_yorumu = gemini_ile_yorumla(api_key, sembol, son['Close'], rsi, macd, sinyal, cmf, ema_durumu, trend_yonu)
+                with st.spinner('Gemini yazıyor...'):
+                    gemini_yorumu = gemini_ile_yorumla(api_key, sembol, son['Close'], rsi, macd, son.get('SIGNAL',0), cmf, ema_durumu, trend)
             else:
-                gemini_yorumu = "⚠️ API Anahtarı girilmedi."
+                gemini_yorumu = "Anahtar girilmedi."
 
-            # EKRAN TASARIMI
             k1, k2, k3, k4 = st.columns(4)
-            degisim = son['Close'] - onceki['Close']
             k1.markdown(f"""<div class="metric-card"><p class="metric-title">Fiyat</p><p class="metric-value">{son['Close']:.2f} {para_birimi}</p></div>""", unsafe_allow_html=True)
             k2.markdown(f"""<div class="metric-card"><p class="metric-title">RSI</p><p class="metric-value">{rsi:.1f}</p></div>""", unsafe_allow_html=True)
-            k3.markdown(f"""<div class="metric-card"><p class="metric-title">Trend</p><p class="metric-value">{trend_yonu}</p></div>""", unsafe_allow_html=True)
+            k3.markdown(f"""<div class="metric-card"><p class="metric-title">Trend</p><p class="metric-value">{trend}</p></div>""", unsafe_allow_html=True)
             k4.markdown(f"""<div class="metric-card"><p class="metric-title">Para Akışı</p><p class="metric-value">{cmf:.2f}</p></div>""", unsafe_allow_html=True)
 
             st.write("")
-            
-            st.markdown("### 🧠 Gemini Yapay Zeka Analizi")
+            st.markdown("### 🧠 Yapay Zeka Yorumu")
             st.info(gemini_yorumu)
-            
             st.divider()
 
-            # GRAFİK
             tab1, tab2 = st.tabs(["📊 Grafik", "🕵️‍♂️ Formasyonlar"])
             with tab1:
                 plot_len = min(len(df), 150)
@@ -193,19 +165,14 @@ if analiz_butonu:
                 if 'SuperTrend' in plot_df.columns:
                      colors = ['green' if x==1 else 'red' for x in plot_df['TrendYon']]
                      add_plots.append(mpf.make_addplot(plot_df['SuperTrend'], type='scatter', color=colors))
-                
-                # Güvenli çizgi
                 if cizgiler:
-                     for seviye, renk in cizgiler:
-                         line_data = [seviye] * len(plot_df)
-                         add_plots.append(mpf.make_addplot(line_data, color=renk, linestyle='--'))
-
+                     for s, r in cizgiler:
+                         add_plots.append(mpf.make_addplot([s]*len(plot_df), color=r, linestyle='--'))
+                
                 fig, _ = mpf.plot(plot_df, type='candle', style='yahoo', addplot=add_plots, volume=True, returnfig=True, figsize=(10, 6))
                 st.pyplot(fig)
             
             with tab2:
                 if formasyonlar:
-                    for f in formasyonlar:
-                        st.write(f"**{f['tur']}:** {f['mesaj']}")
-                else:
-                    st.write("Belirgin formasyon yok.")
+                    for f in formasyonlar: st.write(f"**{f['tur']}:** {f['mesaj']}")
+                else: st.write("Formasyon yok.")
