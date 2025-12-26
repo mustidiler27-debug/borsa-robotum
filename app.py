@@ -23,13 +23,16 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 2. GEMINI ---
+# --- 2. GEMINI (MODEL GÜNCELLENDİ: 1.5-FLASH) ---
 def gemini_ile_yorumla(api_key, sembol, son_fiyat, rsi, macd, sinyal, cmf, ema_durumu, trend):
     if not api_key: return "⚠️ API Anahtarı eksik."
     try:
         genai.configure(api_key=api_key)
-        # GÜNCELLEME: Model ismi 'gemini-1.5-flash' yapıldı. En güncel ve hızlısı bu.
+        
+        # --- DÜZELTME BURADA ---
+        # 'gemini-pro' yerine 'gemini-1.5-flash' kullanıyoruz.
         model = genai.GenerativeModel('gemini-1.5-flash')
+        
         prompt = f"""
         Borsa uzmanı olarak '{sembol}' hissesini teknik verilere göre yorumla.
         VERİLER: Fiyat: {son_fiyat}, Trend: {trend}, RSI: {rsi:.2f}, MACD: {macd:.4f}, CMF: {cmf:.2f}, Ortalamalar: {ema_durumu}
@@ -100,6 +103,7 @@ def verileri_getir(symbol, period):
 with st.sidebar:
     st.header("🤖 ProTrade AI")
     
+    # Secrets'tan anahtarı al
     api_key = None
     if "GEMINI_KEY" in st.secrets:
         api_key = st.secrets["GEMINI_KEY"]
@@ -122,7 +126,7 @@ if analiz_butonu:
     sembol = f"{ham_kod}.IS" if piyasa == "🇹🇷 BIST (TL)" else ham_kod
     para_birimi = "TL" if piyasa == "🇹🇷 BIST (TL)" else "$"
 
-    with st.spinner('Analiz yapılıyor...'):
+    with st.spinner('Veriler çekiliyor...'):
         df = verileri_getir(sembol, periyot)
         if df is None:
             st.error("Veri yok.")
@@ -139,7 +143,7 @@ if analiz_butonu:
 
             gemini_yorumu = ""
             if api_key:
-                with st.spinner('Gemini piyasayı okuyor...'):
+                with st.spinner('Gemini yazıyor...'):
                     gemini_yorumu = gemini_ile_yorumla(api_key, sembol, son['Close'], rsi, macd, son.get('SIGNAL',0), cmf, ema_durumu, trend)
             else:
                 gemini_yorumu = "Anahtar girilmedi."
