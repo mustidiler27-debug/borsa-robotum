@@ -5,4 +5,3 @@ pandas_ta
 mplfinance
 scipy
 matplotlib
-google-generativeai>=0.7.2
