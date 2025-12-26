@@ -8,7 +8,7 @@ from scipy.signal import argrelextrema
 
 # --- 1. AYARLAR ---
 st.set_page_config(
-    page_title="ProTrade V10.1 Fix",
+    page_title="ProTrade V11 - Stable",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -20,121 +20,147 @@ st.markdown("""
 
 # --- 2. HESAPLAMA MOTORU ---
 def pivot_hesapla(df):
-    last = df.iloc[-1]
-    P = (last['High'] + last['Low'] + last['Close']) / 3
-    R1 = 2*P - last['Low']
-    S1 = 2*P - last['High']
-    R2 = P + (last['High'] - last['Low'])
-    S2 = P - (last['High'] - last['Low'])
-    return P, R1, R2, S1, S2
+    try:
+        last = df.iloc[-1]
+        P = (last['High'] + last['Low'] + last['Close']) / 3
+        R1 = 2*P - last['Low']
+        S1 = 2*P - last['High']
+        R2 = P + (last['High'] - last['Low'])
+        S2 = P - (last['High'] - last['Low'])
+        return P, R1, R2, S1, S2
+    except:
+        return 0,0,0,0,0
 
 def formasyon_tara(df):
     bulgular = []
-    son = df.iloc[-1]
-    onceki = df.iloc[-2]
-    
-    # Sıkışma
-    if (son['BB_UPPER'] - son['BB_LOWER']) / son['BB_UPPER'] < 0.08:
-        bulgular.append("⚠️ SIKIŞMA: Sert Hareket Bekleniyor")
+    try:
+        son = df.iloc[-1]
+        onceki = df.iloc[-2]
+        
+        # Sıkışma
+        if (son['BB_UPPER'] - son['BB_LOWER']) / son['BB_UPPER'] < 0.08:
+            bulgular.append("⚠️ SIKIŞMA: Sert Hareket Bekleniyor")
 
-    # Mumlar
-    if (onceki['Close'] < onceki['Open']) and (son['Close'] > son['Open']) and \
-       (son['Open'] < onceki['Close']) and (son['Close'] > onceki['Open']):
-        bulgular.append("🐂 YUTAN BOĞA: Yükseliş Sinyali")
+        # Mumlar
+        if (onceki['Close'] < onceki['Open']) and (son['Close'] > son['Open']) and \
+        (son['Open'] < onceki['Close']) and (son['Close'] > onceki['Open']):
+            bulgular.append("🐂 YUTAN BOĞA: Yükseliş Sinyali")
+    except:
+        pass
         
     return bulgular
 
 def verileri_getir(symbol, period):
     try:
-        # YÖNTEM DEĞİŞİKLİĞİ: Ticker().history daha kararlıdır
+        # Ticker modülü daha güvenlidir
         ticker = yf.Ticker(symbol)
         df = ticker.history(period=period)
         
-        # Eğer boş gelirse None döndür
         if df.empty: return None
 
-        # Sütun isimlerini temizle (TimeZone vb. sorunları için)
+        # Sütun İsimlerini Temizle (MultiIndex Hatasını Önler)
+        df.columns = [c if isinstance(c, str) else c[0] for c in df.columns]
+        
+        # Tarih formatını düzelt
         df.index = df.index.tz_localize(None)
 
-        # İNDİKATÖRLER (FIBONACCI & EMA)
+        # GÜVENLİ EMA HESAPLAMA (HATA ÖNLEYİCİ)
+        # Eğer veri sayısı EMA uzunluğundan az ise o EMA'yı hesaplama!
+        veri_sayisi = len(df)
         fibo_emas = [21, 55, 144, 233, 610]
-        for ema in fibo_emas:
-            df[f'EMA_{ema}'] = df.ta.ema(length=ema)
         
-        df['RSI'] = df.ta.rsi(length=14)
+        for ema in fibo_emas:
+            if veri_sayisi > ema:
+                # Sadece 'Close' sütununu kullanarak hesapla (Çoklu kolon hatasını engeller)
+                df[f'EMA_{ema}'] = df.ta.ema(close=df['Close'], length=ema)
+            else:
+                # Veri yetersizse 0 bas, program çökmesin
+                df[f'EMA_{ema}'] = np.nan
+
+        # İndikatörler
+        df['RSI'] = df.ta.rsi(close=df['Close'], length=14)
         
         # MACD
-        macd = df.ta.macd(fast=12, slow=26, signal=9)
+        macd = df.ta.macd(close=df['Close'], fast=12, slow=26, signal=9)
         if macd is not None:
             df = df.join(macd)
             cols = df.columns
-            # Sütun isimlerini güvenli şekilde yeniden adlandır
+            # Dinamik isimlendirme yakalama
             df.rename(columns={cols[-3]: 'MACD', cols[-1]: 'SIGNAL'}, inplace=True)
 
         # Bollinger
-        bbands = df.ta.bbands(length=20, std=2)
+        bbands = df.ta.bbands(close=df['Close'], length=20, std=2)
         if bbands is not None:
             df = df.join(bbands)
             df.rename(columns={df.columns[-3]: 'BB_LOWER', df.columns[-1]: 'BB_UPPER'}, inplace=True)
 
         # SuperTrend
-        st_ind = df.ta.supertrend(length=10, multiplier=3)
+        st_ind = df.ta.supertrend(high=df['High'], low=df['Low'], close=df['Close'], length=10, multiplier=3)
         if st_ind is not None:
             df['SuperTrend'] = st_ind[st_ind.columns[0]]
             df['TrendYon'] = st_ind[st_ind.columns[1]]
 
-        df['CMF'] = df.ta.cmf(length=20)
+        df['CMF'] = df.ta.cmf(high=df['High'], low=df['Low'], close=df['Close'], volume=df['Volume'], length=20)
+        
+        # Nan temizliği (Grafik çizimi için baştaki boşlukları at)
+        df.dropna(subset=['EMA_21'], inplace=True)
+        
         return df
     
     except Exception as e:
-        st.error(f"Teknik Hata: {e}")
+        # Hata olursa ekrana bas ama çökme
+        st.error(f"Veri işleme hatası: {e}")
         return None
 
 def puan_hesapla(df):
     puan = 0
-    son = df.iloc[-1]
-    if son['Close'] > son.get('EMA_144', 0): puan += 25
-    if son.get('TrendYon') == 1: puan += 25
-    if son.get('MACD', 0) > son.get('SIGNAL', 0): puan += 15
-    if 30 < son.get('RSI', 50) < 70: puan += 15
-    if son.get('CMF', 0) > 0: puan += 20
+    try:
+        son = df.iloc[-1]
+        # EMA 144 var mı kontrol et (NaN değilse)
+        if not pd.isna(son.get('EMA_144')) and son['Close'] > son['EMA_144']: puan += 25
+        if son.get('TrendYon') == 1: puan += 25
+        if son.get('MACD', 0) > son.get('SIGNAL', 0): puan += 15
+        if 30 < son.get('RSI', 50) < 70: puan += 15
+        if son.get('CMF', 0) > 0: puan += 20
+    except:
+        pass
     return min(puan, 100)
 
-# --- 3. ARAYÜZ ---
+# --- 3. ARAYÜZ (FORM YAPISI - ENTER TUŞU İÇİN) ---
 st.sidebar.title("🎛️ Piyasa Ayarları")
 
-# RADYO BUTONLARI (DİKKAT EDİLMESİ GEREKEN YER)
-piyasa = st.sidebar.radio("Hangi Borsa?", ["🇹🇷 BIST (TL)", "🇺🇸 ABD (USD)"])
+# Form başlangıcı: Bu sayede Enter tuşu çalışır
+with st.sidebar.form(key='analiz_form'):
+    piyasa = st.radio("Hangi Borsa?", ["🇹🇷 BIST (TL)", "🇺🇸 ABD (USD)"])
+    
+    if piyasa == "🇹🇷 BIST (TL)":
+        kod_giris = st.text_input("Hisse Kodu (Örn: THYAO)", "THYAO")
+    else:
+        kod_giris = st.text_input("Hisse Kodu (Örn: NVDA)", "NVDA")
+        
+    periyot = st.select_slider("Analiz Geçmişi", options=["6mo", "1y", "2y", "5y", "max"], value="2y")
+    
+    # Form gönderme butonu
+    submit_button = st.form_submit_button(label='ANALİZ ET 🚀')
 
-if piyasa == "🇹🇷 BIST (TL)":
-    user_input = st.sidebar.text_input("Hisse Kodu Girin", "THYAO").upper()
-    # Kullanıcı yanlışlıkla .IS yazarsa kodu bozmayalım, temizleyelim
-    temiz_kod = user_input.replace(".IS", "").strip()
-    sembol = f"{temiz_kod}.IS"
-    para_birimi = "TL"
-    st.sidebar.info(f"Sistemde aranacak kod: **{sembol}**")
-else:
-    user_input = st.sidebar.text_input("Hisse Kodu Girin", "NVDA").upper()
-    sembol = user_input.strip()
-    para_birimi = "$"
-    st.sidebar.info(f"Sistemde aranacak kod: **{sembol}**")
+# --- 4. ÇALIŞTIRMA MANTIĞI ---
+if submit_button:
+    # Kod Temizliği
+    ham_kod = kod_giris.upper().strip().replace(".IS", "")
+    if piyasa == "🇹🇷 BIST (TL)":
+        sembol = f"{ham_kod}.IS"
+        para_birimi = "TL"
+    else:
+        sembol = ham_kod
+        para_birimi = "$"
 
-periyot = st.sidebar.select_slider("Zaman", options=["6mo", "1y", "2y", "5y"], value="1y")
-
-# --- 4. ÇALIŞTIRMA ---
-if st.sidebar.button("ANALİZ ET 🚀", use_container_width=True):
-    with st.spinner('Veriler çekiliyor...'):
+    with st.spinner(f'{sembol} analiz ediliyor...'):
         df = verileri_getir(sembol, periyot)
         
-        if df is None:
-            st.error("❌ VERİ BULUNAMADI!")
-            st.warning(f"**Aranan Sembol:** `{sembol}`")
-            st.markdown("""
-            **Olası Çözümler:**
-            1. Sol menüde **Borsa Seçimi** (BIST / ABD) doğru mu?
-            2. Hisse kodunu doğru yazdınız mı? (Örn: THYAO)
-            3. Sayfayı yenileyip tekrar deneyin.
-            """)
+        if df is None or df.empty:
+            st.error("❌ VERİ ALINAMADI")
+            st.warning(f"Aranan: {sembol}")
+            st.info("Lütfen hisse kodunu kontrol edin veya 'Analiz Geçmişi'ni artırın (EMA 610 için en az 2y veri gerekir).")
         else:
             son = df.iloc[-1]
             onceki = df.iloc[-2]
@@ -142,26 +168,29 @@ if st.sidebar.button("ANALİZ ET 🚀", use_container_width=True):
             formasyonlar = formasyon_tara(df)
             P, R1, R2, S1, S2 = pivot_hesapla(df)
 
-            # ÜST BİLGİ
+            # EKRAN ÇIKTILARI
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Fiyat", f"{son['Close']:.2f} {para_birimi}", f"{son['Close']-onceki['Close']:.2f}")
-            c2.metric("Altın Puan", f"{puan}", "İyi" if puan>70 else "Riskli")
+            c2.metric("Puan", f"{puan}", "Güçlü" if puan>70 else "Nötr")
             c3.metric("Trend", "YÜKSELİŞ 🔼" if son.get('TrendYon')==1 else "DÜŞÜŞ 🔻")
-            c4.metric("Para Akışı", "Giriş 💰" if son.get('CMF', 0)>0 else "Çıkış 💸")
+            c4.metric("Hacim", "Giriş 💰" if son.get('CMF', 0)>0 else "Çıkış 💸")
             
             st.divider()
 
-            # GRAFİK & VERİ
             col_g, col_d = st.columns([3, 1])
             
             with col_g:
-                st.subheader("🕯️ Fibonacci & EMA Analizi")
+                st.subheader("🕯️ Altın Oran Grafiği")
+                # Grafik verisi (Son 150 gün)
                 plot_df = df.iloc[-150:]
-                add_plots = [
-                    mpf.make_addplot(plot_df['EMA_144'], color='blue', width=2, panel=0),
-                    mpf.make_addplot(plot_df['EMA_233'], color='darkblue', width=2, panel=0),
-                    mpf.make_addplot(plot_df['EMA_610'], color='purple', width=2.5, panel=0),
-                ]
+                
+                add_plots = []
+                # Sadece hesaplanabilmiş (NaN olmayan) EMA'ları çiz
+                if 'EMA_144' in plot_df.columns and not plot_df['EMA_144'].isnull().all():
+                    add_plots.append(mpf.make_addplot(plot_df['EMA_144'], color='blue', width=2, panel=0))
+                if 'EMA_610' in plot_df.columns and not plot_df['EMA_610'].isnull().all():
+                    add_plots.append(mpf.make_addplot(plot_df['EMA_610'], color='purple', width=2.5, panel=0))
+                
                 if 'SuperTrend' in plot_df.columns:
                     colors = ['green' if x==1 else 'red' for x in plot_df['TrendYon']]
                     add_plots.append(mpf.make_addplot(plot_df['SuperTrend'], type='scatter', color=colors))
@@ -170,22 +199,19 @@ if st.sidebar.button("ANALİZ ET 🚀", use_container_width=True):
                                   addplot=add_plots, volume=True, 
                                   returnfig=True, figsize=(10,6))
                 st.pyplot(fig)
-                st.caption("Mavi Çizgi: EMA 144 (Altın Destek) | Mor Çizgi: EMA 610 (Ana Trend)")
 
             with col_d:
-                st.subheader("Hedefler (Pivot)")
+                st.subheader("Pivot Seviyeleri")
                 st.table(pd.DataFrame({
-                    "Seviye": ["R2 (Direnç)", "R1", "Pivot", "S1", "S2 (Destek)"],
+                    "Seviye": ["Direnç 2", "Direnç 1", "PIVOT", "Destek 1", "Destek 2"],
                     "Fiyat": [f"{R2:.2f}", f"{R1:.2f}", f"{P:.2f}", f"{S1:.2f}", f"{S2:.2f}"]
                 }))
                 
                 st.subheader("Sinyaller")
-                for f in formasyonlar: st.info(f)
-                
-                if son['Close'] > son['EMA_144']:
-                    st.success("✅ Fiyat 144 Ortalamanın Üzerinde (Pozitif)")
+                if len(formasyonlar) > 0:
+                    for f in formasyonlar: st.info(f)
                 else:
-                    st.error("🔻 Fiyat 144 Ortalamanın Altında (Negatif)")
+                    st.write("Belirgin formasyon yok.")
 
 else:
-    st.info("👈 Sol menüden Borsa seçin ve 'ANALİZ ET' butonuna basın.")
+    st.info("👈 Sol menüden kodu yazıp ENTER'a basın.")
