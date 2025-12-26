@@ -8,7 +8,7 @@ import google.generativeai as genai
 from scipy.signal import argrelextrema
 
 # --- 1. AYARLAR ---
-st.set_page_config(page_title="ProTrade V22 - Final Fix", layout="wide")
+st.set_page_config(page_title="ProTrade V23 - Final", layout="wide")
 
 st.markdown("""
 <style>
@@ -23,14 +23,13 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 2. GEMINI (MODEL GÜNCELLENDİ: 1.5-FLASH) ---
+# --- 2. GEMINI ---
 def gemini_ile_yorumla(api_key, sembol, son_fiyat, rsi, macd, sinyal, cmf, ema_durumu, trend):
     if not api_key: return "⚠️ API Anahtarı eksik."
     try:
         genai.configure(api_key=api_key)
         
-        # --- DÜZELTME BURADA ---
-        # 'gemini-pro' yerine 'gemini-1.5-flash' kullanıyoruz.
+        # MODEL İSMİ GÜNCEL STANDART
         model = genai.GenerativeModel('gemini-1.5-flash')
         
         prompt = f"""
@@ -43,7 +42,8 @@ def gemini_ile_yorumla(api_key, sembol, son_fiyat, rsi, macd, sinyal, cmf, ema_d
         """
         response = model.generate_content(prompt)
         return response.text
-    except Exception as e: return f"Hata: {e}"
+    except Exception as e:
+        return f"Hata Oluştu: {str(e)}"
 
 # --- 3. TEKNİK ---
 def formasyon_avcisi(df):
@@ -103,7 +103,6 @@ def verileri_getir(symbol, period):
 with st.sidebar:
     st.header("🤖 ProTrade AI")
     
-    # Secrets'tan anahtarı al
     api_key = None
     if "GEMINI_KEY" in st.secrets:
         api_key = st.secrets["GEMINI_KEY"]
@@ -143,7 +142,7 @@ if analiz_butonu:
 
             gemini_yorumu = ""
             if api_key:
-                with st.spinner('Gemini yazıyor...'):
+                with st.spinner('Gemini piyasayı okuyor...'):
                     gemini_yorumu = gemini_ile_yorumla(api_key, sembol, son['Close'], rsi, macd, son.get('SIGNAL',0), cmf, ema_durumu, trend)
             else:
                 gemini_yorumu = "Anahtar girilmedi."
