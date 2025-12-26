@@ -6,9 +6,9 @@ import mplfinance as mpf
 import numpy as np
 from scipy.signal import argrelextrema
 
-# --- 1. AYARLAR & STİL ---
+# --- 1. AYARLAR & CSS STİL ---
 st.set_page_config(
-    page_title="ProTrade V18 - Bulletproof",
+    page_title="ProTrade V19 - Lab Mode",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -21,67 +21,67 @@ st.markdown("""
         border: 1px solid #444;
         padding: 10px 15px;
         border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         margin-bottom: 10px;
     }
-    .metric-title { font-size: 14px; color: #aaa; margin: 0; }
-    .metric-value { font-size: 22px; font-weight: bold; color: #fff; margin: 5px 0; }
-    .metric-delta { font-size: 12px; color: #ddd; }
+    .metric-title { font-size: 13px; color: #aaa; margin: 0; }
+    .metric-value { font-size: 20px; font-weight: bold; color: #fff; margin: 5px 0; }
     .gradient-text {
-        background: -webkit-linear-gradient(45deg, #00C9FF, #92FE9D);
+        background: -webkit-linear-gradient(45deg, #FF512F, #DD2476);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         font-weight: bold;
-        font-size: 28px;
+        font-size: 26px;
     }
     .stTabs [data-baseweb="tab-list"] { gap: 8px; }
     .stTabs [data-baseweb="tab"] {
-        height: 35px;
-        border-radius: 6px;
-        background-color: #161b22;
-        border: 1px solid #30363d;
-        color: white;
-        font-size: 14px;
+        height: 35px; background-color: #161b22; border: 1px solid #30363d; color: white; font-size: 14px;
     }
-    .stTabs [aria-selected="true"] {
-        background-color: #238636 !important;
-        border-color: #238636 !important;
-    }
+    .stTabs [aria-selected="true"] { background-color: #DD2476 !important; border-color: #DD2476 !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 2. FONKSİYONLAR ---
+# --- 2. YAPAY ZEKA YORUM MOTORU ---
 def yapay_zeka_ozet_yaz(df):
     try:
         son = df.iloc[-1]
         yorum = ""
-        # Trend
-        if not pd.isna(son.get('EMA_144')):
-            if son['Close'] > son['EMA_144']:
-                yorum += "Teknik görünüm pozitif. Fiyat, uzun vadeli trend desteği olan **EMA 144** seviyesinin üzerinde işlem görüyor. Bu, alıcıların piyasaya hakim olduğunu gösterir. "
-            else:
-                yorum += "Teknik görünüm zayıfladı. Fiyat kritik **EMA 144** desteğinin altına sarktı. Bu bölge artık direnç görevi görebilir, dikkatli olunmalı. "
-        # Momentum
-        if son.get('TrendYon') == 1:
-            yorum += "SuperTrend indikatörü 'AL' sinyaliyle yükselişi destekliyor. "
+        
+        # 1. Bollinger Yorumu (YENİ)
+        bb_upper = son['BB_UPPER']
+        bb_lower = son['BB_LOWER']
+        close = son['Close']
+        if close > bb_upper:
+            yorum += "⚠️ **Bollinger Uyarısı:** Fiyat üst bandı delip geçti. Bu çok güçlü bir yükseliş iştahı demek ama aynı zamanda 'Aşırı Alım' bölgesindeyiz. Kısa vadeli bir düzeltme (içeri dönüş) yaşanabilir. "
+        elif close < bb_lower:
+            yorum += "⚠️ **Bollinger Uyarısı:** Fiyat alt bandın dışına sarktı. Piyasa aşırı satılmış durumda, buradan tepki yükselişi gelme ihtimali yüksek. "
         else:
-            yorum += "SuperTrend şu an 'SAT' baskısının sürdüğünü işaret ediyor. "
-        # Hacim
-        if son.get('CMF', 0) > 0:
-            yorum += "Hissede **Para Girişi** mevcut, bu da yükseliş ihtimalini güçlendiriyor."
+            # Bant Genişliği (Sıkışma)
+            width = (bb_upper - bb_lower) / bb_upper
+            if width < 0.10:
+                yorum += "⚡ **Sıkışma Var:** Bollinger bantları iyice daraldı. Fiyat enerji topluyor, yakında sert bir patlama (yönü belirsiz) olabilir. "
+
+        # 2. EMA Yorumu (5-13-21-55-89)
+        if son['EMA_5'] > son['EMA_21']:
+            yorum += "✅ **Kısa Vade:** EMA 5, EMA 21'in üzerinde. Kısa vadeli trend yukarı. "
         else:
-            yorum += "Ancak **Para Çıkışı** var, yükselişler hacimsiz kalabilir."
+            yorum += "🔻 **Kısa Vade:** EMA 5, EMA 21'in altına indi. Kısa vadede güç kaybı var. "
+            
+        if close > son['EMA_89']:
+            yorum += "🏆 **Ana Trend:** Fiyat EMA 89 (Ana Trend) üzerinde, uzun vade görünüm pozitif. "
+        else:
+            yorum += "⛔ **Ana Trend:** Fiyat EMA 89'un altında, ana trend negatif baskı altında. "
+
+        # 3. MFI Yorumu (ACMF Yerine)
+        mfi = son.get('MFI', 50)
+        if mfi > 80:
+            yorum += "💰 **MFI (Para Akışı):** Para girişi aşırı seviyede (80+). Zirve görülebilir. "
+        elif mfi < 20:
+            yorum += "💸 **MFI (Para Akışı):** Para çıkışı durma noktasına geldi (20-). Dip görülebilir. "
+        elif mfi > 50:
+            yorum += "💰 **MFI:** Para girişi pozitif yönde devam ediyor. "
+            
         return yorum
     except: return "Veri yetersiz."
-
-def rsi_yorumu_yap(rsi):
-    if rsi > 70: return f"RSI **{rsi:.1f}** ile aşırı alım bölgesinde. Düzeltme gelebilir."
-    elif rsi < 30: return f"RSI **{rsi:.1f}** ile aşırı satım bölgesinde. Tepki yükselişi beklenebilir."
-    else: return f"RSI **{rsi:.1f}** ile nötr bölgede."
-
-def macd_yorumu_yap(macd, signal):
-    if macd > signal: return "MACD, Sinyal çizgisini yukarı kesti (AL)."
-    else: return "MACD, Sinyal çizgisinin altında (SAT/BEKLE)."
 
 def formasyon_avcisi(df):
     bulgular = []
@@ -98,25 +98,31 @@ def formasyon_avcisi(df):
         if len(son_tepeler) >= 2:
             t1, t2 = son_tepeler.iloc[-2], son_tepeler.iloc[-1]
             if abs(t1 - t2) / t1 < 0.05 and t2 > (son['Close'] * 0.95):
-                bulgular.append({"tur": "⛰️ İKİLİ TEPE", "mesaj": f"Direnç ({t2:.2f}) aşılamıyor."})
-                cizgiler.append((float(t2), 'red')) # Çizgi ekle
+                bulgular.append({"tur": "⛰️ İKİLİ TEPE", "mesaj": f"Direnç ({t2:.2f}) oluştu."})
+                cizgiler.append((float(t2), 'red'))
 
         if len(son_dipler) >= 2:
             d1, d2 = son_dipler.iloc[-2], son_dipler.iloc[-1]
             if abs(d1 - d2) / d1 < 0.05 and d2 < (son['Close'] * 1.05):
-                bulgular.append({"tur": "✅ İKİLİ DİP", "mesaj": f"Destek ({d2:.2f}) çalışıyor."})
-                cizgiler.append((float(d2), 'green')) # Çizgi ekle
+                bulgular.append({"tur": "✅ İKİLİ DİP", "mesaj": f"Destek ({d2:.2f}) oluştu."})
+                cizgiler.append((float(d2), 'green'))
 
-        if (son['BB_UPPER'] - son['BB_LOWER']) / son['BB_UPPER'] < 0.12:
-            bulgular.append({"tur": "⚠️ SIKIŞMA", "mesaj": "Sert kırılım yaklaşıyor."})
-        
         onceki = df.iloc[-2]
         if (onceki['Close'] < onceki['Open']) and (son['Close'] > son['Open']) and \
            (son['Open'] < onceki['Close']) and (son['Close'] > onceki['Open']):
-            bulgular.append({"tur": "🐂 YUTAN BOĞA", "mesaj": "Güçlü yükseliş sinyali."})
+            bulgular.append({"tur": "🐂 YUTAN BOĞA", "mesaj": "Dönüş sinyali."})
             
     except: pass
     return bulgular, cizgiler
+
+def pivot_hesapla(df):
+    try:
+        last = df.iloc[-1]
+        P = (last['High'] + last['Low'] + last['Close']) / 3
+        R1, S1 = 2*P - last['Low'], 2*P - last['High']
+        R2, S2 = P + (last['High'] - last['Low']), P - (last['High'] - last['Low'])
+        return P, R1, R2, S1, S2
+    except: return 0,0,0,0,0
 
 def verileri_getir(symbol, period):
     try:
@@ -127,27 +133,35 @@ def verileri_getir(symbol, period):
         df.index = df.index.tz_localize(None)
         
         rows = len(df)
-        for ema in [21, 50, 144, 200, 610]:
+        # 1. EMA'lar (5, 13, 21, 55, 89)
+        for ema in [5, 13, 21, 55, 89]:
             df[f'EMA_{ema}'] = df.ta.ema(close=df['Close'], length=ema) if rows > ema else np.nan
 
+        # 2. Bollinger Bantları (20, 2)
+        bbands = df.ta.bbands(close=df['Close'], length=20, std=2)
+        if bbands is not None:
+            df = df.join(bbands)
+            df.rename(columns={df.columns[-3]: 'BB_LOWER', df.columns[-1]: 'BB_UPPER', df.columns[-2]: 'BB_MID'}, inplace=True)
+
+        # 3. İndikatörler
         df['RSI'] = df.ta.rsi(close=df['Close'], length=14)
+        
+        # MACD
         macd = df.ta.macd(close=df['Close'], fast=12, slow=26, signal=9)
         if macd is not None:
             df = df.join(macd)
             cols = df.columns
             df.rename(columns={cols[-3]: 'MACD', cols[-1]: 'SIGNAL'}, inplace=True)
             
-        bbands = df.ta.bbands(close=df['Close'], length=20, std=2)
-        if bbands is not None:
-            df = df.join(bbands)
-            df.rename(columns={df.columns[-3]: 'BB_LOWER', df.columns[-1]: 'BB_UPPER'}, inplace=True)
-            
+        # SuperTrend
         st_ind = df.ta.supertrend(high=df['High'], low=df['Low'], close=df['Close'], length=10, multiplier=3)
         if st_ind is not None:
             df['SuperTrend'] = st_ind[st_ind.columns[0]]
             df['TrendYon'] = st_ind[st_ind.columns[1]]
 
-        df['CMF'] = df.ta.cmf(high=df['High'], low=df['Low'], close=df['Close'], volume=df['Volume'], length=20)
+        # 4. MFI (Money Flow Index - ACMF yerine en iyi alternatif)
+        df['MFI'] = df.ta.mfi(high=df['High'], low=df['Low'], close=df['Close'], volume=df['Volume'], length=14)
+        
         return df
     except: return None
 
@@ -155,11 +169,18 @@ def puan_hesapla(df):
     puan = 0
     try:
         son = df.iloc[-1]
-        if not pd.isna(son.get('EMA_144')) and son['Close'] > son['EMA_144']: puan += 25
-        if son.get('TrendYon') == 1: puan += 25
+        # EMA 89 (Ana Trend)
+        if not pd.isna(son.get('EMA_89')) and son['Close'] > son['EMA_89']: puan += 20
+        # Bollinger Orta Bant
+        if not pd.isna(son.get('BB_MID')) and son['Close'] > son['BB_MID']: puan += 10
+        # Trend
+        if son.get('TrendYon') == 1: puan += 20
+        # MACD
         if son.get('MACD', 0) > son.get('SIGNAL', 0): puan += 15
+        # RSI
         if 30 < son.get('RSI', 50) < 70: puan += 15
-        if son.get('CMF', 0) > 0: puan += 20
+        # MFI
+        if son.get('MFI', 50) > 50: puan += 20
     except: pass
     return min(puan, 100)
 
@@ -175,7 +196,6 @@ with st.sidebar:
         st.write("⏱️ **Periyot:**")
         zaman_secenekleri = ["3 Ay", "6 Ay", "YTD", "1 Yıl", "2 Yıl", "5 Yıl"]
         secilen_etiket = st.pills("Zaman", zaman_secenekleri, default="1 Yıl")
-        
         zaman_map = {"3 Ay": "3mo", "6 Ay": "6mo", "YTD": "ytd", "1 Yıl": "1y", "2 Yıl": "2y", "5 Yıl": "5y"}
         periyot = zaman_map.get(secilen_etiket, "1y")
 
@@ -188,7 +208,7 @@ if analiz_butonu:
     sembol = f"{ham_kod}.IS" if piyasa == "🇹🇷 BIST (TL)" else ham_kod
     para_birimi = "TL" if piyasa == "🇹🇷 BIST (TL)" else "$"
 
-    with st.spinner('Analiz yapılıyor...'):
+    with st.spinner('Laboratuvar sonuçları işleniyor...'):
         df = verileri_getir(sembol, periyot)
         
         if df is None:
@@ -198,27 +218,23 @@ if analiz_butonu:
             onceki = df.iloc[-2] if len(df)>1 else son
             puan = puan_hesapla(df)
             formasyonlar, cizgiler = formasyon_avcisi(df)
-            
-            # Pivot (Basit)
-            P = (son['High'] + son['Low'] + son['Close']) / 3
-            R1, S1 = 2*P - son['Low'], 2*P - son['High']
-            
+            P, R1, R2, S1, S2 = pivot_hesapla(df)
             genel_yorum = yapay_zeka_ozet_yaz(df)
-            rsi_text = rsi_yorumu_yap(son.get('RSI', 50))
-            macd_text = macd_yorumu_yap(son.get('MACD', 0), son.get('SIGNAL', 0))
 
             # METRİKLER
             k1, k2, k3, k4 = st.columns(4)
             degisim = son['Close'] - onceki['Close']
-            k1.markdown(f"""<div class="metric-card"><p class="metric-title">Fiyat</p><p class="metric-value">{son['Close']:.2f} {para_birimi}</p><p class="metric-delta">{degisim:.2f} değişim</p></div>""", unsafe_allow_html=True)
-            k2.markdown(f"""<div class="metric-card"><p class="metric-title">AI Puanı</p><p class="metric-value">{puan}/100</p><p class="metric-delta">Teknik Skor</p></div>""", unsafe_allow_html=True)
+            k1.markdown(f"""<div class="metric-card"><p class="metric-title">Fiyat</p><p class="metric-value">{son['Close']:.2f} {para_birimi}</p></div>""", unsafe_allow_html=True)
+            puan_renk = "#4CAF50" if puan > 70 else "#FF9800"
+            k2.markdown(f"""<div class="metric-card"><p class="metric-title">AI Puanı</p><p class="metric-value" style="color:{puan_renk}">{puan}/100</p></div>""", unsafe_allow_html=True)
             trend_icon = "🟢 YÜKSELİŞ" if son.get('TrendYon')==1 else "🔴 DÜŞÜŞ"
-            k3.markdown(f"""<div class="metric-card"><p class="metric-title">Trend</p><p class="metric-value">{trend_icon}</p><p class="metric-delta">Yön Durumu</p></div>""", unsafe_allow_html=True)
-            para_icon = "💰 GİRİŞ" if son.get('CMF', 0)>0 else "💸 ÇIKIŞ"
-            k4.markdown(f"""<div class="metric-card"><p class="metric-title">Para Akışı</p><p class="metric-value">{para_icon}</p><p class="metric-delta">CMF Bazlı</p></div>""", unsafe_allow_html=True)
+            k3.markdown(f"""<div class="metric-card"><p class="metric-title">Trend</p><p class="metric-value">{trend_icon}</p></div>""", unsafe_allow_html=True)
+            mfi_val = son.get('MFI', 50)
+            para_icon = "💰 GİRİŞ" if mfi_val > 50 else "💸 ÇIKIŞ"
+            k4.markdown(f"""<div class="metric-card"><p class="metric-title">Para Akışı (MFI)</p><p class="metric-value">{para_icon}</p></div>""", unsafe_allow_html=True)
             
             st.write("")
-            tab_genel, tab_indikator, tab_formasyon = st.tabs(["📊 GENEL BAKIŞ", "📈 İNDİKATÖRLER", "🕵️‍♂️ FORMASYONLAR"])
+            tab_genel, tab_indikator, tab_formasyon = st.tabs(["📊 TEKNİK LABORATUVAR", "📈 DETAY VERİLER", "🕵️‍♂️ FORMASYONLAR"])
 
             with tab_genel:
                 col_g1, col_g2 = st.columns([3, 1])
@@ -227,45 +243,71 @@ if analiz_butonu:
                     plot_df = df.iloc[-plot_len:]
                     
                     add_plots = []
-                    # EMA'lar
-                    if 'EMA_144' in plot_df.columns and not plot_df['EMA_144'].isnull().all():
-                        add_plots.append(mpf.make_addplot(plot_df['EMA_144'], color='blue', width=2))
-                    if 'EMA_610' in plot_df.columns and not plot_df['EMA_610'].isnull().all():
-                        add_plots.append(mpf.make_addplot(plot_df['EMA_610'], color='purple', width=2.5))
+                    # 1. EMA'lar (İnce ve Kalın Ayarlı)
+                    if 'EMA_5' in plot_df.columns: add_plots.append(mpf.make_addplot(plot_df['EMA_5'], color='yellow', width=0.8))
+                    if 'EMA_13' in plot_df.columns: add_plots.append(mpf.make_addplot(plot_df['EMA_13'], color='orange', width=0.8))
+                    if 'EMA_21' in plot_df.columns: add_plots.append(mpf.make_addplot(plot_df['EMA_21'], color='red', width=1))
+                    if 'EMA_55' in plot_df.columns: add_plots.append(mpf.make_addplot(plot_df['EMA_55'], color='cyan', width=1.5))
+                    if 'EMA_89' in plot_df.columns: add_plots.append(mpf.make_addplot(plot_df['EMA_89'], color='blue', width=2))
+                    
+                    # 2. Bollinger Bantları
+                    if 'BB_UPPER' in plot_df.columns:
+                        add_plots.append(mpf.make_addplot(plot_df['BB_UPPER'], color='gray', linestyle='--', width=0.8))
+                        add_plots.append(mpf.make_addplot(plot_df['BB_LOWER'], color='gray', linestyle='--', width=0.8))
+
+                    # 3. SuperTrend
                     if 'SuperTrend' in plot_df.columns:
                         colors = ['green' if x==1 else 'red' for x in plot_df['TrendYon']]
                         add_plots.append(mpf.make_addplot(plot_df['SuperTrend'], type='scatter', color=colors))
+                    
+                    # 4. Paneller (RSI, MACD, MFI)
+                    if 'RSI' in plot_df.columns:
+                        add_plots.append(mpf.make_addplot(plot_df['RSI'], panel=2, color='white', ylabel='RSI', ylim=(0,100)))
+                    
                     if 'MACD' in plot_df.columns:
-                        add_plots.append(mpf.make_addplot(plot_df['MACD'], color='fuchsia', panel=2))
-                        add_plots.append(mpf.make_addplot(plot_df['SIGNAL'], color='orange', panel=2))
+                        add_plots.append(mpf.make_addplot(plot_df['MACD'], panel=3, color='fuchsia', ylabel='MACD'))
+                        add_plots.append(mpf.make_addplot(plot_df['SIGNAL'], panel=3, color='orange'))
+                    
+                    if 'MFI' in plot_df.columns:
+                        add_plots.append(mpf.make_addplot(plot_df['MFI'], panel=4, color='lime', ylabel='MFI', ylim=(0,100)))
 
-                    # ÇÖZÜM: Formasyon çizgilerini 'hlines' ile değil, 'addplot' ile çiziyoruz (Zırhlı Yöntem)
+                    # Formasyon Çizgileri (Güvenli Yöntem)
                     if cizgiler:
                         for seviye, renk in cizgiler:
-                            # Grafiğin boyu kadar sabit bir çizgi verisi oluşturuyoruz
                             line_data = [seviye] * len(plot_df)
                             add_plots.append(mpf.make_addplot(line_data, color=renk, linestyle='--'))
 
-                    # hlines parametresini sildik, artık hata veremez
-                    fig, _ = mpf.plot(plot_df, type='candle', style='yahoo', 
+                    # GRAFİK ÇİZİMİ (4 Panelli)
+                    fig, _ = mpf.plot(plot_df, type='candle', style='nightclouds', 
                                       addplot=add_plots, volume=True, 
-                                      panel_ratios=(3, 1, 1), returnfig=True, figsize=(10, 8))
+                                      panel_ratios=(4, 1, 1, 1, 1), # Fiyat, Vol, RSI, MACD, MFI
+                                      returnfig=True, figsize=(10, 10))
                     st.pyplot(fig)
-                    st.info(f"🤖 **Yapay Zeka Analisti:**\n\n{genel_yorum}")
+                    st.info(f"🤖 **Yapay Zeka Yorumu:**\n\n{genel_yorum}")
 
                 with col_g2:
-                    st.markdown("### 🎯 Hedefler")
-                    st.table(pd.DataFrame({"Seviye": ["Direnç 1", "PIVOT", "Destek 1"], "Fiyat": [f"{R1:.2f}", f"{P:.2f}", f"{S1:.2f}"]}))
-                    if puan >= 80: st.success("🚀 GÜÇLÜ AL")
-                    elif puan >= 40: st.warning("⚖️ NÖTR")
-                    else: st.error("🔻 SAT")
+                    st.markdown("### 🎯 Pivot Seviyeleri")
+                    st.table(pd.DataFrame({"Seviye": ["R2", "R1", "PIVOT", "S1", "S2"], "Fiyat": [f"{R2:.2f}", f"{R1:.2f}", f"{P:.2f}", f"{S1:.2f}", f"{S2:.2f}"]}))
+                    
+                    st.markdown("### 🧬 EMA Rehberi")
+                    st.caption("🟡 EMA 5-13: Çok Kısa Vade (Al-Sat)")
+                    st.caption("🔴 EMA 21: Kısa Vade Trend")
+                    st.caption("🔵 EMA 55-89: Ana Trend (Omurga)")
+                    
+                    st.markdown("### 🌊 İndikatörler")
+                    st.caption("⚪ **RSI:** 70 üstü pahalı, 30 altı ucuz.")
+                    st.caption("🟣 **MACD:** Kesişimleri takip et.")
+                    st.caption("🟢 **MFI:** Para giriş/çıkışı (ACMF Alternatifi).")
 
             with tab_indikator:
                 c1, c2 = st.columns(2)
                 with c1:
-                    st.info(f"**MACD:** {son.get('MACD',0):.2f}\n\n💡 {macd_text}")
+                    st.info(f"**MACD:** {son.get('MACD',0):.2f}")
+                    st.info(f"**RSI (14):** {son.get('RSI',0):.2f}")
                 with c2:
-                    st.info(f"**RSI:** {son.get('RSI',0):.2f}\n\n💡 {rsi_text}")
+                    st.success(f"**MFI (Para Akışı):** {son.get('MFI',0):.2f}")
+                    st.warning(f"**Bollinger Üst:** {son.get('BB_UPPER',0):.2f}")
+                    st.warning(f"**Bollinger Alt:** {son.get('BB_LOWER',0):.2f}")
 
             with tab_formasyon:
                 if len(formasyonlar) > 0:
