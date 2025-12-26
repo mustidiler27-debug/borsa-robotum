@@ -8,7 +8,7 @@ import google.generativeai as genai  # GEMINI KÜTÜPHANESİ
 from scipy.signal import argrelextrema
 
 # --- 1. AYARLAR ---
-st.set_page_config(page_title="ProTrade V20 - Gemini AI", layout="wide")
+st.set_page_config(page_title="ProTrade V20.1 - Gemini Fix", layout="wide")
 
 st.markdown("""
 <style>
@@ -23,39 +23,41 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 2. GEMINI YORUMCUSU (GERÇEK AI) ---
+# --- 2. GEMINI YORUMCUSU (MODEL GÜNCELLENDİ) ---
 def gemini_ile_yorumla(api_key, sembol, son_fiyat, rsi, macd, sinyal, cmf, ema_durumu, trend):
     if not api_key:
         return "⚠️ Lütfen sol menüden Google Gemini API Anahtarınızı girin."
     
     try:
-        # Gemini'ye bağlan
+        # API Anahtarını Ayarla
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash') # Hızlı ve bedava model
         
-        # Ona göndereceğimiz mektup (Prompt)
+        # DÜZELTME BURADA: 'gemini-1.5-flash' yerine 'gemini-pro' kullanıyoruz.
+        # 'gemini-pro' en kararlı ve yaygın modeldir.
+        model = genai.GenerativeModel('gemini-pro')
+        
         prompt = f"""
-        Sen uzman bir borsa analistisin. Aşağıdaki teknik verilere göre '{sembol}' hissesi için profesyonel, akıcı ve yatırımcı dostu kısa bir yorum yaz.
-        Asla "yatırım tavsiyesi değildir" gibi klişelerle başlama, direkt analize gir.
+        Sen uzman bir borsa analistisin. Aşağıdaki teknik verilere göre '{sembol}' hissesi için kısa ve net bir yorum yaz.
+        Sadece teknik analize odaklan.
         
         VERİLER:
         - Fiyat: {son_fiyat}
-        - Trend Durumu: {trend}
-        - RSI (14): {rsi:.2f} (30 altı ucuz, 70 üstü pahalı)
-        - MACD: {macd:.4f}, Sinyal: {sinyal:.4f} (MACD > Sinyal ise AL)
-        - Para Akışı (CMF): {cmf:.2f} (Pozitifse para girişi var)
+        - Trend: {trend}
+        - RSI (14): {rsi:.2f}
+        - MACD Durumu: {macd:.4f} (Sinyal: {sinyal:.4f})
+        - Para Akışı (CMF): {cmf:.2f}
         - Hareketli Ortalamalar: {ema_durumu}
         
-        Lütfen 3 kısa paragraf halinde yorumla:
-        1. Genel Görünüm ve Trend
-        2. İndikatörlerin Durumu (RSI, MACD, Hacim)
-        3. Olası Senaryo (Yükseliş veya Düşüş ihtimali)
+        Lütfen şu formatta yaz:
+        1. Genel Trend Yorumu
+        2. İndikatör Sinyalleri
+        3. Sonuç (Olumlu/Olumsuz)
         """
         
         response = model.generate_content(prompt)
         return response.text
     except Exception as e:
-        return f"Hata: Gemini'ye bağlanamadım. API Anahtarını kontrol et. ({e})"
+        return f"Hata: Gemini bağlantı sorunu. ({e})"
 
 # --- 3. DİĞER FONKSİYONLAR ---
 def formasyon_avcisi(df):
@@ -122,11 +124,8 @@ def verileri_getir(symbol, period):
 with st.sidebar:
     st.header("🤖 ProTrade AI")
     
-    # API ANAHTARI GİRİŞİ (YENİ)
-    with st.expander("🔑 API Anahtarı (Gerekli)", expanded=True):
+    with st.expander("🔑 API Anahtarı", expanded=True):
         api_key = st.text_input("Gemini API Key", type="password", help="aistudio.google.com'dan alabilirsin")
-        if not api_key:
-            st.warning("Yapay zeka yorumu için anahtar girin.")
     
     piyasa = st.selectbox("Piyasa", ["🇹🇷 BIST (TL)", "🇺🇸 ABD (USD)"])
     kod_giris = st.text_input("Hisse Kodu", "THYAO" if piyasa == "🇹🇷 BIST (TL)" else "NVDA")
@@ -161,13 +160,13 @@ if analiz_butonu:
             ema_durumu = "Pozitif (Fiyat > EMA144)" if son['Close'] > son.get('EMA_144', 999999) else "Negatif (Fiyat < EMA144)"
             trend_yonu = "Yükseliş" if son.get('TrendYon') == 1 else "Düşüş"
 
-            # GEMINI ÇAĞIRMA (YENİ)
+            # GEMINI ÇAĞIRMA
             gemini_yorumu = ""
             if api_key:
                 with st.spinner('Gemini piyasayı okuyor... 🧠'):
                     gemini_yorumu = gemini_ile_yorumla(api_key, sembol, son['Close'], rsi, macd, sinyal, cmf, ema_durumu, trend_yonu)
             else:
-                gemini_yorumu = "⚠️ Yorumları görmek için sol menüden API Anahtarınızı girin."
+                gemini_yorumu = "⚠️ API Anahtarı girilmedi."
 
             # EKRAN TASARIMI
             k1, k2, k3, k4 = st.columns(4)
@@ -179,7 +178,6 @@ if analiz_butonu:
 
             st.write("")
             
-            # --- GEMINI YORUM KUTUSU ---
             st.markdown("### 🧠 Gemini Yapay Zeka Analizi")
             st.info(gemini_yorumu)
             
