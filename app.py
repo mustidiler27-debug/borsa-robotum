@@ -6,30 +6,21 @@ import mplfinance as mpf
 
 # --- 1. MODERN SAYFA AYARLARI ---
 st.set_page_config(
-    page_title="ProTrade AI Terminal",
-    layout="wide", # Ekranın tamamını kullan
+    page_title="ProTrade V8 - Kontrol Merkezi",
+    layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Özel CSS ile Modern Görünüm (Kartlar, Gölgeler)
+# Tablo ve Kart Stilleri
 st.markdown("""
 <style>
-    .metric-card {
-        background-color: #0e1117;
-        border: 1px solid #303030;
-        padding: 20px;
-        border-radius: 10px;
-        box-shadow: 2px 2px 10px rgba(0,0,0,0.5);
-    }
-    div[data-testid="stMetricValue"] {
-        font-size: 24px;
-    }
+    .big-font { font-size:20px !important; font-weight: bold; }
+    .stDataFrame { width: 100%; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 2. FONKSİYONLAR (BEYİN KISMI) ---
+# --- 2. HESAPLAMA FONKSİYONLARI ---
 def pivot_hesapla(df):
-    # Klasik Pivot Noktaları
     last = df.iloc[-1]
     P = (last['High'] + last['Low'] + last['Close']) / 3
     R1 = 2*P - last['Low']
@@ -46,16 +37,18 @@ def verileri_getir(symbol, period):
         
         if df.empty or len(df) < 50: return None
 
-        # İndikatörler
+        # Temel İndikatörler
         df['RSI'] = df.ta.rsi(length=14)
-        df['EMA_50'] = df.ta.ema(length=50)
         df['EMA_200'] = df.ta.ema(length=200)
-        
-        # MACD
+        df['EMA_50'] = df.ta.ema(length=50)
+
+        # MACD (Grafik için gerekli)
         macd = df.ta.macd(fast=12, slow=26, signal=9)
         if macd is not None:
             df = df.join(macd)
-            df.rename(columns={df.columns[-3]: 'MACD', df.columns[-1]: 'SIGNAL'}, inplace=True)
+            # Sütun isimlerini sabitleyelim
+            cols = df.columns
+            df.rename(columns={cols[-3]: 'MACD', cols[-1]: 'SIGNAL', cols[-2]: 'MACD_HIST'}, inplace=True)
 
         # Bollinger
         bbands = df.ta.bbands(length=20, std=2)
@@ -75,152 +68,120 @@ def verileri_getir(symbol, period):
         return df
     except: return None
 
-def puanlama_motoru(df):
+def puan_hesapla(df):
     puan = 0
     son = df.iloc[-1]
-    
-    # Kriterler
-    if son['Close'] > son['EMA_200']: puan += 20
-    if son.get('TrendYon', 0) == 1: puan += 20
-    if 30 < son['RSI'] < 70: puan += 10
-    if son['RSI'] < 30: puan += 15 # Dip tepkisi şansı
+    if son['Close'] > son['EMA_200']: puan += 25
+    if son.get('TrendYon') == 1: puan += 25
     if son['MACD'] > son['SIGNAL']: puan += 20
-    if son.get('CMF', 0) > 0: puan += 15
-    
-    # Bollinger alt banda yakınsa ek puan
-    bb_konum = (son['Close'] - son['BB_LOWER']) / (son['BB_UPPER'] - son['BB_LOWER'])
-    if bb_konum < 0.2: puan += 15
-    
-    return min(puan, 100) # Maks 100
+    if 30 < son['RSI'] < 70: puan += 10
+    if son.get('CMF', 0) > 0: puan += 20
+    return min(puan, 100)
 
-# --- 3. YAN MENÜ (SIDEBAR) ---
-st.sidebar.title("🎛️ ProTrade AI")
-piyasa = st.sidebar.selectbox("Piyasa Seç", ["🇹🇷 BIST (Türkiye)", "🇺🇸 ABD (Global)", "₿ Kripto"])
+# --- 3. YAN MENÜ ---
+st.sidebar.title("🎛️ Piyasa Seçimi")
+piyasa = st.sidebar.selectbox("Piyasa", ["🇹🇷 BIST", "🇺🇸 ABD", "₿ Kripto"])
 
-if piyasa == "🇹🇷 BIST (Türkiye)":
-    sembol = st.sidebar.text_input("Sembol", "THYAO").upper() + ".IS"
-elif piyasa == "🇺🇸 ABD (Global)":
-    sembol = st.sidebar.text_input("Sembol", "AAPL").upper()
+if piyasa == "🇹🇷 BIST":
+    kod = st.sidebar.text_input("Hisse Kodu", "THYAO").upper()
+    sembol = f"{kod}.IS"
+elif piyasa == "🇺🇸 ABD":
+    sembol = st.sidebar.text_input("Hisse Kodu", "NVDA").upper()
 else:
-    sembol = st.sidebar.text_input("Sembol", "BTC").upper() + "-USD"
+    kod = st.sidebar.text_input("Coin Kodu", "BTC").upper()
+    sembol = f"{kod}-USD"
 
-periyot = st.sidebar.select_slider("Analiz Derinliği", options=["3mo", "6mo", "1y", "2y", "5y"], value="1y")
+periyot = st.sidebar.select_slider("Zaman Dilimi", options=["6mo", "1y", "2y", "5y"], value="1y")
 
-if st.sidebar.button("ANALİZİ BAŞLAT 🔥", use_container_width=True):
-    with st.spinner('Yapay zeka verileri işliyor...'):
+# --- 4. ANA EKRAN ---
+if st.sidebar.button("ANALİZ ET 🚀", use_container_width=True):
+    with st.spinner('Veriler işleniyor...'):
         df = verileri_getir(sembol, periyot)
         
         if df is None:
-            st.error("Veri bulunamadı! Kodu kontrol et.")
+            st.error("Veri bulunamadı!")
         else:
             son = df.iloc[-1]
             onceki = df.iloc[-2]
-            puan = puanlama_motoru(df)
+            puan = puan_hesapla(df)
             P, R1, R2, S1, S2 = pivot_hesapla(df)
 
-            # --- 4. ANA EKRAN (DASHBOARD) ---
-            
-            # ÜST BİLGİ ŞERİDİ
+            # --- A. ÜST METRİKLER ---
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Fiyat", f"{son['Close']:.2f}", f"{son['Close'] - onceki['Close']:.2f}")
+            c2.metric("Puan", f"{puan}/100", "Güçlü" if puan>70 else "Zayıf")
             
-            trend_renk = "YÜKSELİŞ 🟢" if son.get('TrendYon') == 1 else "DÜŞÜŞ 🔴"
-            c2.metric("Trend", trend_renk)
+            trend_icon = "🔼 YÜKSELİŞ" if son.get('TrendYon')==1 else "🔻 DÜŞÜŞ"
+            c3.metric("Trend", trend_icon)
             
-            c3.metric("RSI (Güç)", f"{son['RSI']:.1f}")
-            
-            # MODERN PUAN BAR'I
-            c4.write(f"**Yapay Zeka Skoru: {puan}/100**")
-            renk_bar = "green" if puan > 70 else ("orange" if puan > 40 else "red")
-            c4.progress(puan/100)
+            para = "Giriş 💰" if son.get('CMF', 0) > 0 else "Çıkış 💸"
+            c4.metric("Para Akışı", para)
 
-            st.divider()
+            st.markdown("---")
 
-            # ANA İÇERİK: 2 Sütunlu Yapı
-            # Sol taraf: Grafik (Geniş), Sağ taraf: Özet Rapor (Dar)
-            col_main, col_side = st.columns([3, 1])
+            # --- B. İKİ SÜTUNLU YAPI ---
+            col_grafik, col_veri = st.columns([3, 1]) # Grafik 3 birim, Veriler 1 birim genişlikte
 
-            with col_main:
-                # SEKMELER (TABS) - İŞTE MODERNLİK BURADA
-                tab1, tab2, tab3 = st.tabs(["📊 Teknik Grafik", "🧠 AI Sinyal Dedektörü", "🔢 Pivot & Destekler"])
+            with col_grafik:
+                st.subheader("📊 Teknik Grafik (Fiyat + MACD)")
                 
-                with tab1:
-                    # GRAFİK
-                    plot_df = df.iloc[-120:]
-                    add_plots = [
-                        mpf.make_addplot(plot_df['EMA_200'], color='purple', width=2),
-                    ]
-                    if 'SuperTrend' in plot_df.columns:
-                        renkler = ['green' if x == 1 else 'red' for x in plot_df['TrendYon']]
-                        add_plots.append(mpf.make_addplot(plot_df['SuperTrend'], type='scatter', markersize=8, color=renkler))
-
-                    fig, _ = mpf.plot(plot_df, type='candle', style='yahoo', 
-                                      addplot=add_plots, volume=True, 
-                                      returnfig=True, title=f"{sembol} - Günlük", figsize=(10,6))
-                    st.pyplot(fig)
-
-                with tab2:
-                    st.subheader("Yapay Zeka Ne Görüyor?")
-                    # Madde madde sinyaller
-                    if son['Close'] > son['EMA_200']:
-                        st.success("✅ Fiyat 200 günlük ortalamanın üzerinde (Uzun vade POZİTİF)")
-                    else:
-                        st.error("🔻 Fiyat 200 günlük ortalamanın altında (Uzun vade NEGATİF)")
-                    
-                    if son['MACD'] > son['SIGNAL']:
-                        st.success("✅ MACD Al sinyali üretiyor.")
-                    
-                    bb_width = (son['BB_UPPER'] - son['BB_LOWER']) / son['BB_UPPER']
-                    if bb_width < 0.10:
-                        st.warning("⚠️ BOLLINGER SIKIŞMASI: Çok sert bir patlama hazırlığı var!")
-                    
-                    if (onceki['Close'] < onceki['Open']) and (son['Close'] > son['Open']) and (son['Close'] > onceki['Open']):
-                        st.info("🐂 Yutan Boğa formasyonu tespit edildi.")
-
-                with tab3:
-                    st.subheader("Kritik Destek & Dirençler")
-                    st.markdown("Fiyatın dönebileceği matematiksel seviyeler:")
-                    
-                    col_p1, col_p2 = st.columns(2)
-                    with col_p1:
-                        st.info(f"**Direnç 2 (R2):** {R2:.2f}")
-                        st.warning(f"**Direnç 1 (R1):** {R1:.2f}")
-                    with col_p2:
-                        st.success(f"**Destek 1 (S1):** {S1:.2f}")
-                        st.error(f"**Destek 2 (S2):** {S2:.2f}")
-                    
-                    st.caption(f"Pivot Noktası (Denge): {P:.2f}")
-
-            with col_side:
-                # SAĞ TARAFTA HIZLI BAKIŞ KARTI
-                st.markdown("### 🚦 Hızlı Bakış")
+                # GRAFİK AYARLARI
+                plot_df = df.iloc[-120:]
+                add_plots = [
+                    mpf.make_addplot(plot_df['EMA_200'], color='purple', width=2, panel=0),
+                    # MACD Paneli (Panel 1)
+                    mpf.make_addplot(plot_df['MACD'], color='blue', panel=1, ylabel='MACD'),
+                    mpf.make_addplot(plot_df['SIGNAL'], color='orange', panel=1),
+                    mpf.make_addplot(plot_df['MACD_HIST'], type='bar', color='dimgray', panel=1),
+                ]
                 
-                if puan >= 75:
-                    st.success("# AL 🔥")
-                    st.write("Momentum çok güçlü.")
-                elif puan >= 45:
-                    st.warning("# TUT ⚖️")
-                    st.write("Yön kararsız.")
+                # SuperTrend varsa ekle
+                if 'SuperTrend' in plot_df.columns:
+                    renkler = ['green' if x == 1 else 'red' for x in plot_df['TrendYon']]
+                    add_plots.append(mpf.make_addplot(plot_df['SuperTrend'], type='scatter', markersize=5, color=renkler, panel=0))
+
+                # Grafiği Çiz
+                fig, _ = mpf.plot(plot_df, type='candle', style='yahoo', 
+                                  addplot=add_plots, volume=False, # Hacmi kapattım MACD net görünsün
+                                  panel_ratios=(3, 1), # Fiyat büyük, MACD küçük
+                                  returnfig=True, title=f"{sembol}", figsize=(10,7))
+                st.pyplot(fig)
+
+            with col_veri:
+                st.subheader("🔢 Kritik Seviyeler")
+                
+                # 1. PIVOT TABLOSU (Destek Direnç)
+                st.markdown("##### 🎯 Hedef & Stoplar")
+                pivot_data = {
+                    "Seviye": ["Direnç 2 (R2)", "Direnç 1 (R1)", "PIVOT (Denge)", "Destek 1 (S1)", "Destek 2 (S2)"],
+                    "Fiyat": [f"{R2:.2f}", f"{R1:.2f}", f"{P:.2f}", f"{S1:.2f}", f"{S2:.2f}"]
+                }
+                st.table(pd.DataFrame(pivot_data))
+
+                # 2. CANLI İNDİKATÖR DEĞERLERİ
+                st.markdown("##### 📟 İndikatör Değerleri")
+                
+                # MACD Durumu
+                macd_durum = "AL ✅" if son['MACD'] > son['SIGNAL'] else "SAT ❌"
+                st.write(f"**MACD:** {son['MACD']:.2f}")
+                st.write(f"**Sinyal:** {son['SIGNAL']:.2f}")
+                st.caption(f"Durum: {macd_durum}")
+                
+                st.divider()
+                
+                # RSI Durumu
+                rsi_durum = "Nötr 😐"
+                if son['RSI'] > 70: rsi_durum = "Pahalı 🔴"
+                elif son['RSI'] < 30: rsi_durum = "Ucuz 🟢"
+                st.write(f"**RSI (14):** {son['RSI']:.2f}")
+                st.caption(f"Durum: {rsi_durum}")
+
+                st.divider()
+                st.markdown("##### 🤖 Sinyal Özeti")
+                if son['Close'] > son['EMA_200']:
+                    st.success("Uzun Vade: YÜKSELİŞ")
                 else:
-                    st.error("# SAT 🔻")
-                    st.write("Trend negatif.")
-                
-                st.markdown("---")
-                st.write("**Para Girişi (CMF):**")
-                if son.get('CMF', 0) > 0:
-                    st.write("💰 Pozitif")
-                else:
-                    st.write("💸 Negatif")
-                    
-                st.write("**Volatilite:**")
-                st.write(f"%{bb_width*100:.1f} (Bant Genişliği)")
+                    st.error("Uzun Vade: DÜŞÜŞ")
 
 else:
-    # Karşılama Ekranı
-    st.info("👈 Sol menüden bir piyasa seç ve 'ANALİZİ BAŞLAT' butonuna bas.")
-    st.markdown("""
-    ### 🚀 Neler Yeni?
-    * **Sekmeli Yapı:** Grafiği ve sinyalleri ayrı sekmelerde gör.
-    * **Pivot Analizi:** Yarın fiyatın nereye çarpıp döneceğini gör.
-    * **Modern Skor:** Puanını ilerleme çubuğuyla takip et.
-    """)
+    st.info("👈 Sol menüden hisse seçip butona basın.")
